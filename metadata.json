@@ -1,0 +1,5 @@
+{
+  "name": "Due Guardian",
+  "description": "Your guardian for every due date. An application to manage your vehicle's EMIs and document expiry dates with timely reminders. Add your cars, bikes, trucks, and machinery, track their finances, and never miss a due date again with a clear, organized dashboard.",
+  "requestFramePermissions": []
+}
