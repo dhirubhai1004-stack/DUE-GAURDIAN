@@ -1,3 +1,4 @@
+
 {
   "short_name": "Due Guardian",
   "name": "Due Guardian",
@@ -17,7 +18,9 @@
     }
   ],
   "start_url": ".",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "theme_color": "#1e293b",
   "background_color": "#0f172a"
 }

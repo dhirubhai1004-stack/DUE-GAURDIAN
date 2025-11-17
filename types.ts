@@ -17,6 +17,14 @@ export interface Document {
   fileName?: string;
 }
 
+export interface EmiPayment {
+  dueDate: string;
+  paidDate: string;
+  status: 'on-time' | 'late';
+  amount: number;
+  bounceCharges?: number;
+}
+
 export interface Emi {
   id: string;
   startDate: string; // YYYY-MM-DD of the first EMI
@@ -28,6 +36,15 @@ export interface Emi {
   emiBank?: string;
   principalAmount?: number;
   interestRate?: number;
+  totalVehicleCost?: number;
+  downPayment?: number;
+  extraCharges?: number;
+  lastPaymentDate?: string;
+  settlementDetails?: {
+    amount: number;
+    date: string;
+  };
+  paymentHistory?: EmiPayment[];
 }
 
 export interface Vehicle {
@@ -49,4 +66,4 @@ export type ReminderItem = {
   endDate?: string; // Only for EMIs
 };
 
-export type ReminderCategory = 'overdue' | 'today' | 'upcoming';
+export type ReminderCategory = 'overdue' | 'today' | 'tomorrow' | 'upcoming' | 'dueTomorrowEmis';
