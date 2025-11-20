@@ -1,8 +1,11 @@
 
 
+
+
+
 import React from 'react';
-import { Vehicle, ReminderItem, ReminderCategory, Emi, Document as DocType } from '../types';
-import { CarIcon, TruckIcon, BikeIcon, MachineIcon, DocumentIcon, EmiIcon, SnoozeIcon, OtherVehicleIcon, CheckCircleIcon } from './icons';
+import { Vehicle, ReminderItem, ReminderCategory, Emi, Document as DocType, VehicleType } from '../types';
+import { CarIcon, TruckIcon, BikeIcon, MachineIcon, DocumentIcon, EmiIcon, SnoozeIcon, OtherVehicleIcon, CheckCircleIcon, PersonalLoanIcon, BusinessLoanIcon, HomeLoanIcon } from './icons';
 
 interface DashboardProps {
   vehicles: Vehicle[];
@@ -28,6 +31,10 @@ const getVehicleIcon = (type: string) => {
         case 'Truck': return <TruckIcon className="w-5 h-5 mr-2" />;
         case 'Bike': return <BikeIcon className="w-5 h-5 mr-2" />;
         case 'Machine': return <MachineIcon className="w-5 h-5 mr-2" />;
+        case 'Personal Loan': return <PersonalLoanIcon className="w-5 h-5 mr-2" />;
+        case 'Business Loan': return <BusinessLoanIcon className="w-5 h-5 mr-2" />;
+        case 'Home Loan': return <HomeLoanIcon className="w-5 h-5 mr-2" />;
+        case 'Overdraft / CC': return <BusinessLoanIcon className="w-5 h-5 mr-2 text-amber-400" />;
         default: return <OtherVehicleIcon className="w-5 h-5 mr-2" />;
     }
 };
@@ -195,8 +202,8 @@ const Dashboard: React.FC<DashboardProps> = ({ vehicles, onViewVehicle, snoozed,
         <h1 className="text-3xl font-bold text-indigo-400 mb-6">Dashboard</h1>
         {vehicles.length === 0 ? (
             <div className="text-center py-16 bg-slate-800 rounded-lg">
-                <p className="text-slate-400">No vehicles added yet.</p>
-                <p className="text-slate-500">Add a vehicle to see your reminders here.</p>
+                <p className="text-slate-400">No items added yet.</p>
+                <p className="text-slate-500">Add a vehicle or loan to see your reminders here.</p>
             </div>
         ) : (
             <>

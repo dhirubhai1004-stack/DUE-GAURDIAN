@@ -4,7 +4,7 @@ import useLocalStorage from './hooks/useLocalStorage';
 import { Vehicle, VehicleType, Emi, Document, PREDEFINED_DOC_NAMES, EmiPayment } from './types';
 import Dashboard from './components/Dashboard';
 import Modal from './components/Modal';
-import { PlusIcon, ArrowLeftIcon, CarIcon, TruckIcon, MachineIcon, BikeIcon, DashboardIcon, VehicleIcon, DownloadIcon, EditIcon, DeleteIcon, CheckCircleIcon, OtherVehicleIcon } from './components/icons';
+import { PlusIcon, ArrowLeftIcon, CarIcon, TruckIcon, MachineIcon, BikeIcon, DashboardIcon, VehicleIcon, DownloadIcon, EditIcon, DeleteIcon, CheckCircleIcon, OtherVehicleIcon, PersonalLoanIcon, BusinessLoanIcon, HomeLoanIcon } from './components/icons';
 import AddToHomeScreenPrompt from './components/AddToHomeScreenPrompt';
 
 const vehicleTypeIcons: Record<string, React.ReactNode> = {
@@ -12,6 +12,10 @@ const vehicleTypeIcons: Record<string, React.ReactNode> = {
     [VehicleType.Truck]: <TruckIcon className="w-8 h-8 text-orange-400" />,
     [VehicleType.Machine]: <MachineIcon className="w-8 h-8 text-yellow-400" />,
     [VehicleType.Bike]: <BikeIcon className="w-8 h-8 text-green-400" />,
+    [VehicleType.PersonalLoan]: <PersonalLoanIcon className="w-8 h-8 text-emerald-400" />,
+    [VehicleType.HomeLoan]: <HomeLoanIcon className="w-8 h-8 text-rose-400" />,
+    [VehicleType.BusinessLoan]: <BusinessLoanIcon className="w-8 h-8 text-purple-400" />,
+    [VehicleType.Overdraft]: <BusinessLoanIcon className="w-8 h-8 text-amber-400" />,
 };
 
 const getVehicleIcon = (type: string) => {
@@ -32,35 +36,66 @@ const formatDate = (dateString?: string): string => {
 type View = 'dashboard' | 'vehicleList' | 'vehicleDetail';
 
 // Helper components defined outside App to prevent re-renders
-const AddVehicleModal: React.FC<{ isOpen: boolean; onClose: () => void; onAddVehicle: (vehicle: Omit<Vehicle, 'id' | 'documents' | 'emis' | 'archivedDocuments'>) => void; }> = ({ isOpen, onClose, onAddVehicle }) => {
+const AddVehicleModal: React.FC<{ 
+    isOpen: boolean; 
+    onClose: () => void; 
+    onAddVehicle: (vehicle: Omit<Vehicle, 'id' | 'documents' | 'emis' | 'archivedDocuments'>) => void; 
+    mode: 'asset' | 'loan';
+}> = ({ isOpen, onClose, onAddVehicle, mode }) => {
     const [make, setMake] = useState('');
     const [model, setModel] = useState('');
     const [regNum, setRegNum] = useState('');
-    const [type, setType] = useState<string>(VehicleType.Car);
+    const [type, setType] = useState<string>(mode === 'asset' ? VehicleType.Car : VehicleType.PersonalLoan);
     const [customType, setCustomType] = useState('');
+
+    const assetTypes = [VehicleType.Car, VehicleType.Bike, VehicleType.Truck, VehicleType.Machine, VehicleType.Other];
+    const loanTypes = [VehicleType.PersonalLoan, VehicleType.HomeLoan, VehicleType.BusinessLoan, VehicleType.Overdraft];
+
+    useEffect(() => {
+        if (isOpen) {
+            // Reset state and set default type based on mode
+            setMake('');
+            setModel('');
+            setRegNum('');
+            setCustomType('');
+            setType(mode === 'asset' ? VehicleType.Car : VehicleType.PersonalLoan);
+        }
+    }, [isOpen, mode]);
+
+    const availableTypes = mode === 'asset' ? assetTypes : loanTypes;
+    const isLoanMode = mode === 'loan';
+
+    const placeholderMake = isLoanMode ? "Lender / Bank Name (e.g., HDFC)" : "Make (e.g., Honda)";
+    const placeholderModel = isLoanMode ? "Loan Purpose / Name (e.g., Home Renovation)" : "Model (e.g., Civic)";
+    const placeholderReg = isLoanMode ? "Loan Account Number" : "Registration Number";
+    const buttonText = isLoanMode ? "Add Loan" : "Add Vehicle/Asset";
+    const titleText = isLoanMode ? "Add New Loan" : "Add New Asset";
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const finalType = type === VehicleType.Other ? customType : type;
         if (!make || !model || !regNum || !finalType) return;
         onAddVehicle({ make, model, registrationNumber: regNum.toUpperCase(), type: finalType });
-        setMake(''); setModel(''); setRegNum(''); setType(VehicleType.Car); setCustomType('');
         onClose();
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Add New Vehicle">
+        <Modal isOpen={isOpen} onClose={onClose} title={titleText}>
             <form onSubmit={handleSubmit} className="space-y-4">
-                <select value={type} onChange={e => setType(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded">
-                    {Object.values(VehicleType).map(t => <option key={t} value={t}>{t}</option>)}
+                <label className="block text-sm font-medium text-slate-400 mb-1">Type</label>
+                <select value={type} onChange={e => setType(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded mb-4">
+                    {availableTypes.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
+                
                 {type === VehicleType.Other && (
-                     <input type="text" placeholder="Custom Vehicle Type" value={customType} onChange={e => setCustomType(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
+                     <input type="text" placeholder="Custom Type Name" value={customType} onChange={e => setCustomType(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
                 )}
-                <input type="text" placeholder="Make (e.g., Honda)" value={make} onChange={e => setMake(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
-                <input type="text" placeholder="Model (e.g., Civic)" value={model} onChange={e => setModel(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
-                <input type="text" placeholder="Registration Number" value={regNum} onChange={e => setRegNum(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
-                <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 p-2 rounded text-white font-bold">Add Vehicle</button>
+                
+                <input type="text" placeholder={placeholderMake} value={make} onChange={e => setMake(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
+                <input type="text" placeholder={placeholderModel} value={model} onChange={e => setModel(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
+                <input type="text" placeholder={placeholderReg} value={regNum} onChange={e => setRegNum(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
+                
+                <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 p-2 rounded text-white font-bold mt-4">{buttonText}</button>
             </form>
         </Modal>
     );
@@ -71,7 +106,8 @@ const EmiFormModal: React.FC<{
     onClose: () => void; 
     onSubmit: (emi: Omit<Emi, 'id'>, existingId?: string) => void;
     initialData?: Emi | null;
-}> = ({ isOpen, onClose, onSubmit, initialData }) => {
+    vehicleType?: string;
+}> = ({ isOpen, onClose, onSubmit, initialData, vehicleType }) => {
     const [amount, setAmount] = useState('');
     const [startDate, setStartDate] = useState('');
     const [totalTenure, setTotalTenure] = useState('');
@@ -85,6 +121,7 @@ const EmiFormModal: React.FC<{
     const [downPayment, setDownPayment] = useState('');
     
     const isEditing = !!initialData;
+    const isLoan = [VehicleType.PersonalLoan, VehicleType.BusinessLoan, VehicleType.Overdraft, VehicleType.HomeLoan].includes(vehicleType as VehicleType);
 
     useEffect(() => {
         if (isOpen) {
@@ -171,18 +208,26 @@ const EmiFormModal: React.FC<{
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Edit EMI Details' : 'Add EMI Details'}>
             <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto p-1">
-                <input type="number" placeholder="EMI Amount" value={amount} onChange={e => setAmount(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
-                <input type="number" placeholder="Total Tenure (months)" value={totalTenure} onChange={e => setTotalTenure(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
+                <div>
+                    <label className="text-sm text-slate-400 mb-1 block">EMI Amount</label>
+                    <input type="number" placeholder="Enter EMI Amount" value={amount} onChange={e => setAmount(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
+                </div>
                 
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="text-sm text-slate-400 mb-1 block">Start Date</label>
+                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
+                    </div>
+                    <div>
+                        <label className="text-sm text-slate-400 mb-1 block">Tenure (Months)</label>
+                        <input type="number" placeholder="e.g. 36" value={totalTenure} onChange={e => setTotalTenure(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
+                    </div>
+                </div>
+
                 {totalAmount > 0 && <div className="p-2 bg-slate-700/50 rounded text-center">
                     <span className="text-sm text-slate-400">Total Repayment: </span>
                     <span className="font-bold text-white">₹{totalAmount.toLocaleString()}</span>
                 </div>}
-                
-                <div>
-                    <label className="text-sm text-slate-400">EMI Start Date</label>
-                    <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
-                </div>
 
                 {calculatedEndDate && (
                     <div className="p-2 bg-slate-700/50 rounded text-center">
@@ -192,32 +237,59 @@ const EmiFormModal: React.FC<{
                 )}
                 
                 <hr className="border-slate-700" />
-                <h3 className="text-center text-slate-400 text-sm font-semibold pt-2">Optional Details</h3>
+                <h3 className="text-center text-slate-400 text-sm font-semibold pt-2">Loan Details</h3>
 
                 <div>
-                    <label className="text-sm text-slate-400">Paid Till Date</label>
-                    <p className="text-xs text-slate-500 mb-1">Select the last paid date to calculate paid installments. Use this if you're adding an old loan or need to correct the paid count.</p>
+                    <label className="text-sm text-slate-400 mb-1 block">Paid Till Date</label>
+                    <p className="text-xs text-slate-500 mb-1">Select the last date you paid an EMI to auto-calculate progress.</p>
                     <input type="date" value={paidTillDate} onChange={e => setPaidTillDate(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" />
                 </div>
 
-                <input type="number" placeholder="Total Vehicle Cost" value={totalCost} onChange={e => setTotalCost(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" />
-                <input type="number" placeholder="Down Payment" value={downPayment} onChange={e => setDownPayment(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" />
-                
                 <div>
-                    <label className="text-sm text-slate-400">Financed Amount (Auto-Calculated)</label>
-                     <input 
-                        type="text" 
-                        readOnly 
-                        value={financedAmount > 0 ? `₹${financedAmount.toLocaleString()}` : ''} 
-                        className="w-full p-2 bg-slate-900 border border-slate-600 rounded text-slate-300 cursor-not-allowed"
-                        aria-label="Financed Amount"
-                    />
+                    <label className="text-sm text-slate-400 mb-1 block">{isLoan ? "Principal Amount" : "Total Asset Cost"}</label>
+                    <input type="number" placeholder={isLoan ? "Principal Loan Amount" : "Total Asset Cost"} value={totalCost} onChange={e => setTotalCost(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" />
                 </div>
                 
-                <input type="number" step="0.01" placeholder="Interest Rate (%)" value={interest} onChange={e => setInterest(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" />
-                <input type="text" placeholder="Loan Provider" value={provider} onChange={e => setProvider(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" />
-                <input type="text" placeholder="Loan ID" value={loanId} onChange={e => setLoanId(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" />
-                <input type="text" placeholder="EMI Bank" value={bank} onChange={e => setBank(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" />
+                {!isLoan && (
+                    <div>
+                        <label className="text-sm text-slate-400 mb-1 block">Down Payment</label>
+                        <input type="number" placeholder="Down Payment" value={downPayment} onChange={e => setDownPayment(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" />
+                    </div>
+                )}
+                
+                {!isLoan && (
+                    <div>
+                        <label className="text-sm text-slate-400 mb-1 block">Financed Amount (Auto-Calculated)</label>
+                        <input 
+                            type="text" 
+                            readOnly 
+                            value={financedAmount > 0 ? `₹${financedAmount.toLocaleString()}` : ''} 
+                            className="w-full p-2 bg-slate-700 border border-slate-600 rounded"
+                            aria-label="Financed Amount"
+                        />
+                    </div>
+                )}
+                
+                <div>
+                    <label className="text-sm text-slate-400 mb-1 block">Rate of Interest (%)</label>
+                    <input type="number" step="0.01" placeholder="Interest Rate" value={interest} onChange={e => setInterest(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" />
+                </div>
+                
+                <div>
+                    <label className="text-sm text-slate-400 mb-1 block">Loan Provider</label>
+                    <input type="text" placeholder="e.g. HDFC Bank" value={provider} onChange={e => setProvider(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" />
+                </div>
+                
+                <div>
+                    <label className="text-sm text-slate-400 mb-1 block">Loan ID / Account No.</label>
+                    <input type="text" placeholder="Loan Account Number" value={loanId} onChange={e => setLoanId(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" />
+                </div>
+                
+                <div>
+                    <label className="text-sm text-slate-400 mb-1 block">EMI Bank</label>
+                    <input type="text" placeholder="Bank for Auto-Debit" value={bank} onChange={e => setBank(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" />
+                </div>
+
                 <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 p-2 rounded text-white font-bold !mt-6">{isEditing ? 'Save Changes' : 'Add EMI'}</button>
             </form>
         </Modal>
@@ -232,7 +304,8 @@ const AddDocModal: React.FC<{
     initialData?: Document | null;
     activeDocuments: Document[];
     isRenewing?: boolean;
-}> = ({ isOpen, onClose, onSave, initialData, activeDocuments, isRenewing }) => {
+    vehicleType?: string;
+}> = ({ isOpen, onClose, onSave, initialData, activeDocuments, isRenewing, vehicleType }) => {
     const isEditing = !!initialData && !isRenewing;
     const [docName, setDocName] = useState<(typeof PREDEFINED_DOC_NAMES)[number]>(PREDEFINED_DOC_NAMES[0]);
     const [customDocName, setCustomDocName] = useState('');
@@ -241,6 +314,14 @@ const AddDocModal: React.FC<{
     const [fileData, setFileData] = useState<string | undefined>();
     const [fileName, setFileName] = useState<string | undefined>();
     const [docNameError, setDocNameError] = useState<string | null>(null);
+
+    const isLoan = [VehicleType.PersonalLoan, VehicleType.BusinessLoan, VehicleType.Overdraft, VehicleType.HomeLoan].includes(vehicleType as VehicleType);
+
+    const availableDocNames = React.useMemo(() => {
+        return isLoan 
+            ? PREDEFINED_DOC_NAMES.filter(n => ['Loan Agreement', 'KYC Document', 'Tax Invoice', 'Other'].includes(n))
+            : PREDEFINED_DOC_NAMES;
+    }, [isLoan]);
 
     const checkExistingDoc = (name: string, editingDocId?: string): boolean => {
         if (!name) {
@@ -278,7 +359,7 @@ const AddDocModal: React.FC<{
     };
 
     const resetForm = () => {
-        setDocName(PREDEFINED_DOC_NAMES[0]);
+        setDocName(availableDocNames[0]);
         setCustomDocName('');
         setValidFrom('');
         setExpiryDate('');
@@ -291,9 +372,13 @@ const AddDocModal: React.FC<{
         if (isOpen) {
             if (initialData) {
                 const name = initialData.name;
-                if (PREDEFINED_DOC_NAMES.includes(name as any)) {
+                if (availableDocNames.includes(name as any)) {
                     setDocName(name as (typeof PREDEFINED_DOC_NAMES)[number]);
                     setCustomDocName('');
+                } else if (PREDEFINED_DOC_NAMES.includes(name as any)) {
+                    // Fallback if name exists in PREDEFINED but not in filtered list (e.g. changed type)
+                    setDocName('Other');
+                    setCustomDocName(name);
                 } else {
                     setDocName('Other');
                     setCustomDocName(name);
@@ -305,11 +390,13 @@ const AddDocModal: React.FC<{
                     setFileData(initialData.fileData);
                     setFileName(initialData.fileName);
                 }
+            } else {
+                resetForm();
             }
         } else {
             resetForm();
         }
-    }, [isOpen, initialData, isEditing]);
+    }, [isOpen, initialData, isEditing, availableDocNames]);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -342,7 +429,7 @@ const AddDocModal: React.FC<{
         <Modal isOpen={isOpen} onClose={onClose} title={title}>
             <form onSubmit={handleSubmit} className="space-y-4">
                  <select value={docName} onChange={handleDocNameChange} className="w-full p-2 bg-slate-700 border border-slate-600 rounded">
-                    {PREDEFINED_DOC_NAMES.map(name => <option key={name} value={name}>{name}</option>)}
+                    {availableDocNames.map(name => <option key={name} value={name}>{name}</option>)}
                 </select>
                 {docName === 'Other' && <input type="text" placeholder="Custom Document Name" value={customDocName} onChange={handleCustomDocNameChange} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />}
                 {docNameError && <p className="text-sm text-red-400 mt-1">{docNameError}</p>}
@@ -369,18 +456,34 @@ const AddDocModal: React.FC<{
 };
 
 
-const VehicleList: React.FC<{ vehicles: Vehicle[], onSelectVehicle: (id: string) => void, onAddVehicleClick: () => void }> = ({ vehicles, onSelectVehicle, onAddVehicleClick }) => (
+const VehicleList: React.FC<{ vehicles: Vehicle[], onSelectVehicle: (id: string) => void, onAddAssetClick: () => void, onAddLoanClick: () => void }> = ({ vehicles, onSelectVehicle, onAddAssetClick, onAddLoanClick }) => (
     <div className="p-4 md:p-6">
         <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold text-indigo-400">My Vehicles</h1>
-            <button onClick={onAddVehicleClick} className="bg-indigo-600 hover:bg-indigo-700 p-2 rounded-full text-white">
-                <PlusIcon className="w-6 h-6" />
-            </button>
+            <h1 className="text-3xl font-bold text-indigo-400">My Assets & Loans</h1>
+            <div className="flex gap-2">
+                <button onClick={onAddAssetClick} className="bg-indigo-600 hover:bg-indigo-700 py-2 px-3 rounded-lg text-white flex items-center gap-2 text-sm font-bold" title="Add Car, Bike, etc.">
+                    <PlusIcon className="w-4 h-4" />
+                    <span className="hidden sm:inline">Asset</span>
+                    <CarIcon className="w-4 h-4 sm:hidden" />
+                </button>
+                <button onClick={onAddLoanClick} className="bg-emerald-600 hover:bg-emerald-700 py-2 px-3 rounded-lg text-white flex items-center gap-2 text-sm font-bold" title="Add Personal Loan, Home Loan, etc.">
+                    <PlusIcon className="w-4 h-4" />
+                    <span className="hidden sm:inline">Loan</span>
+                    <PersonalLoanIcon className="w-4 h-4 sm:hidden" />
+                </button>
+            </div>
         </div>
         {vehicles.length === 0 ? (
              <div className="text-center py-16 bg-slate-800 rounded-lg">
-                <p className="text-slate-400">No vehicles found.</p>
-                <button onClick={onAddVehicleClick} className="mt-4 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors">Add your first vehicle</button>
+                <p className="text-slate-400">No items found.</p>
+                <div className="flex flex-col items-center gap-3 mt-6">
+                    <button onClick={onAddAssetClick} className="w-48 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2">
+                        <CarIcon className="w-5 h-5" /> Add Asset
+                    </button>
+                    <button onClick={onAddLoanClick} className="w-48 bg-emerald-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2">
+                        <PersonalLoanIcon className="w-5 h-5" /> Add Loan
+                    </button>
+                </div>
             </div>
         ) : (
             <div className="space-y-4">
@@ -462,7 +565,7 @@ const VehicleDetail: React.FC<{
         <div className="p-4 md:p-6">
             <button onClick={onBack} className="flex items-center space-x-2 text-indigo-400 mb-4">
                 <ArrowLeftIcon className="w-6 h-6" />
-                <span>All Vehicles</span>
+                <span>All Items</span>
             </button>
             <div className="bg-slate-800 p-4 rounded-lg flex items-center space-x-4 mb-6">
                 {getVehicleIcon(vehicle.type)}
@@ -510,8 +613,9 @@ const VehicleDetail: React.FC<{
                             
                              <div className="mt-4 pt-3 border-t border-slate-700/50 text-sm text-slate-400 flex flex-col items-start gap-1">
                                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                                    {emi.totalVehicleCost && <div><span className="font-semibold">Total Cost:</span> ₹{emi.totalVehicleCost.toLocaleString()}</div>}
+                                    {emi.totalVehicleCost && <div><span className="font-semibold">{[VehicleType.PersonalLoan, VehicleType.BusinessLoan, VehicleType.Overdraft, VehicleType.HomeLoan].includes(vehicle.type as VehicleType) ? 'Principal Amount:' : 'Total Amount:'}</span> ₹{emi.totalVehicleCost.toLocaleString()}</div>}
                                     {emi.downPayment && <div><span className="font-semibold">Down Payment:</span> ₹{emi.downPayment.toLocaleString()}</div>}
+                                    {emi.interestRate && <div><span className="font-semibold">Interest:</span> {emi.interestRate}%</div>}
                                     {emi.loanProvider && <div><span className="font-semibold">Provider:</span> {emi.loanProvider}</div>}
                                     {emi.emiBank && <div><span className="font-semibold">Bank:</span> {emi.emiBank}</div>}
                                     {emi.loanId && <div><span className="font-semibold">Loan ID:</span> {emi.loanId}</div>}
@@ -683,6 +787,7 @@ const VehicleDetail: React.FC<{
                 initialData={docToEdit ?? docToReplace}
                 isRenewing={!!docToReplace && !docToEdit}
                 activeDocuments={vehicle.documents}
+                vehicleType={vehicle.type}
             />
         </div>
     );
@@ -829,6 +934,7 @@ const App: React.FC = () => {
     const [view, setView] = useState<View>('dashboard');
     const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
     const [isAddVehicleModalOpen, setAddVehicleModalOpen] = useState(false);
+    const [addModalMode, setAddModalMode] = useState<'asset' | 'loan'>('asset');
     const [isEmiModalOpen, setEmiModalOpen] = useState(false);
     const [editingEmi, setEditingEmi] = useState<Emi | null>(null);
     const [installPrompt, setInstallPrompt] = useState<any>(null);
@@ -1197,7 +1303,12 @@ const App: React.FC = () => {
     const renderContent = () => {
         switch (view) {
             case 'vehicleList':
-                return <VehicleList vehicles={vehicles} onSelectVehicle={handleSelectVehicle} onAddVehicleClick={() => setAddVehicleModalOpen(true)} />;
+                return <VehicleList 
+                            vehicles={vehicles} 
+                            onSelectVehicle={handleSelectVehicle} 
+                            onAddAssetClick={() => { setAddModalMode('asset'); setAddVehicleModalOpen(true); }}
+                            onAddLoanClick={() => { setAddModalMode('loan'); setAddVehicleModalOpen(true); }}
+                        />;
             case 'vehicleDetail':
                 if (selectedVehicle) {
                     return <VehicleDetail 
@@ -1258,12 +1369,12 @@ const App: React.FC = () => {
                     </button>
                     <button onClick={() => setView('vehicleList')} className={`flex flex-col items-center space-y-1 ${view === 'vehicleList' || view === 'vehicleDetail' ? 'text-indigo-400' : 'text-slate-400 hover:text-white'}`}>
                         <VehicleIcon className="w-6 h-6" />
-                        <span className="text-xs font-medium">Vehicles</span>
+                        <span className="text-xs font-medium">Items</span>
                     </button>
                 </div>
             </nav>
 
-            <AddVehicleModal isOpen={isAddVehicleModalOpen} onClose={() => setAddVehicleModalOpen(false)} onAddVehicle={handleAddVehicle} />
+            <AddVehicleModal isOpen={isAddVehicleModalOpen} onClose={() => setAddVehicleModalOpen(false)} onAddVehicle={handleAddVehicle} mode={addModalMode} />
             
             {selectedVehicleId && (
                 <EmiFormModal 
@@ -1271,6 +1382,7 @@ const App: React.FC = () => {
                     onClose={() => { setEmiModalOpen(false); setEditingEmi(null); }} 
                     onSubmit={handleSaveEmi}
                     initialData={editingEmi}
+                    vehicleType={selectedVehicle?.type}
                 />
             )}
             

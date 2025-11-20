@@ -1,12 +1,27 @@
+
 export enum VehicleType {
   Car = 'Car',
   Truck = 'Truck',
   Machine = 'Machine',
   Bike = 'Bike',
+  PersonalLoan = 'Personal Loan',
+  HomeLoan = 'Home Loan',
+  Overdraft = 'Overdraft / CC',
+  BusinessLoan = 'Business Loan',
   Other = 'Other',
 }
 
-export const PREDEFINED_DOC_NAMES = ['Registration Certificate (RC)', 'Insurance', 'Pollution Under Control (PUC)', 'Permit', 'Fitness Certificate', 'Other'] as const;
+export const PREDEFINED_DOC_NAMES = [
+  'Registration Certificate (RC)', 
+  'Insurance', 
+  'Pollution Under Control (PUC)', 
+  'Permit', 
+  'Fitness Certificate', 
+  'Loan Agreement',
+  'KYC Document',
+  'Tax Invoice',
+  'Other'
+] as const;
 
 export interface Document {
   id: string;
@@ -50,9 +65,9 @@ export interface Emi {
 export interface Vehicle {
   id:string;
   type: string; // Changed to string for flexibility with "Other"
-  make: string;
-  model: string;
-  registrationNumber: string;
+  make: string; // Lender Name for loans
+  model: string; // Purpose/Description for loans
+  registrationNumber: string; // Account Number for loans
   documents: Document[];
   archivedDocuments: Document[];
   emis: Emi[];
