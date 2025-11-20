@@ -654,9 +654,11 @@ const VehicleDetail: React.FC<{
                     {activeEmis.map(emi => {
                         const remainingAmount = (emi.totalTenure - emi.paidInstallments) * emi.amount;
                         
-                        const startDate = new Date(emi.startDate);
-                        const nextDueDate = new Date(startDate.getFullYear(), startDate.getMonth() + emi.paidInstallments, startDate.getDate());
-                        const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + emi.totalTenure, startDate.getDate());
+                        let [sY, sM, sD] = emi.startDate.split('-').map(Number);
+                        if (sY < 100) sY += 2000;
+
+                        const nextDueDate = new Date(sY, sM - 1 + emi.paidInstallments, sD);
+                        const endDate = new Date(sY, sM - 1 + emi.totalTenure, sD);
 
                         const today = new Date();
                         today.setHours(0, 0, 0, 0);
@@ -1071,8 +1073,10 @@ const App: React.FC = () => {
                     if (snoozedUntil && nowTimestamp < snoozedUntil) return;
                     if (emi.paidInstallments >= emi.totalTenure) return;
 
-                    const startDate = new Date(emi.startDate);
-                    const nextDueDate = new Date(startDate.getFullYear(), startDate.getMonth() + emi.paidInstallments, startDate.getDate());
+                    let [sY, sM, sD] = emi.startDate.split('-').map(Number);
+                    if (sY < 100) sY += 2000;
+                    
+                    const nextDueDate = new Date(sY, sM - 1 + emi.paidInstallments, sD);
                     
                     const dayBeforeDueDate = new Date(nextDueDate);
                     dayBeforeDueDate.setDate(nextDueDate.getDate() - 1);
@@ -1196,8 +1200,9 @@ const App: React.FC = () => {
         updateVehicle(selectedVehicleId, v => {
             const updatedEmis = v.emis.map(emi => {
                 if (emi.id === emiId && emi.paidInstallments < emi.totalTenure) {
-                    const startDate = new Date(emi.startDate);
-                    const dueDate = new Date(startDate.getFullYear(), startDate.getMonth() + emi.paidInstallments, startDate.getDate());
+                    let [sY, sM, sD] = emi.startDate.split('-').map(Number);
+                    if (sY < 100) sY += 2000;
+                    const dueDate = new Date(sY, sM - 1 + emi.paidInstallments, sD);
                     const today = new Date();
                     today.setHours(0,0,0,0);
                     
@@ -1236,8 +1241,9 @@ const App: React.FC = () => {
         updateVehicle(vehicleId, v => {
             const updatedEmis = v.emis.map(e => {
                 if (e.id === emi.id) {
-                    const startDate = new Date(e.startDate);
-                    const dueDate = new Date(startDate.getFullYear(), startDate.getMonth() + e.paidInstallments, startDate.getDate());
+                    let [sY, sM, sD] = e.startDate.split('-').map(Number);
+                    if (sY < 100) sY += 2000;
+                    const dueDate = new Date(sY, sM - 1 + e.paidInstallments, sD);
                     const newPayment: EmiPayment = {
                         dueDate: dueDate.toISOString().split('T')[0],
                         paidDate: paidDate,
@@ -1268,8 +1274,9 @@ const App: React.FC = () => {
             const updatedEmis = v.emis.map(e => {
                 if (e.id === emi.id) {
                     const today = new Date().toISOString().split('T')[0];
-                    const startDate = new Date(e.startDate);
-                    const dueDate = new Date(startDate.getFullYear(), startDate.getMonth() + e.paidInstallments, startDate.getDate());
+                    let [sY, sM, sD] = e.startDate.split('-').map(Number);
+                    if (sY < 100) sY += 2000;
+                    const dueDate = new Date(sY, sM - 1 + e.paidInstallments, sD);
                     const newPayment: EmiPayment = {
                         dueDate: dueDate.toISOString().split('T')[0],
                         paidDate: today,

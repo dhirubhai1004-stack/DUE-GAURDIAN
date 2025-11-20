@@ -154,7 +154,12 @@ const Dashboard: React.FC<DashboardProps> = ({ vehicles, onViewVehicle, snoozed,
                 if (snoozedUntil && nowTimestamp < snoozedUntil) return;
 
                 // Calculate next due date safely using YYYY-MM-DD components
-                const [sY, sM, sD] = emi.startDate.split('-').map(Number);
+                let [sY, sM, sD] = emi.startDate.split('-').map(Number);
+                
+                // Fix: Handle 2-digit years (e.g. 0025) by adding 2000. 
+                // This prevents dates like "26/11/25" (Year 0025) from appearing in Overdue.
+                if (sY < 100) sY += 2000;
+
                 // Month in Date constructor is 0-indexed
                 const nextDueDateObj = new Date(sY, sM - 1 + emi.paidInstallments, sD);
                 const nextDueStr = toYMD(nextDueDateObj);
@@ -172,8 +177,12 @@ const Dashboard: React.FC<DashboardProps> = ({ vehicles, onViewVehicle, snoozed,
                 if (nextDueStr < todayStr) {
                     categorized.overdue.push(reminderItem);
                 } else if (nextDueStr === todayStr || nextDueStr === tomorrowStr) {
-                    // Group EMIs due Today and Tomorrow together
+                    // Group EMIs due Today and Tomorrow together per user request
                     categorized.dueTomorrowEmis.push(reminderItem);
+                } else if (nextDueStr === dayAfterStr) {
+                    categorized.tomorrow.push(reminderItem);
+                } else if (nextDueStr > dayAfterStr) {
+                    categorized.upcoming.push(reminderItem);
                 }
             });
 
@@ -232,7 +241,7 @@ const Dashboard: React.FC<DashboardProps> = ({ vehicles, onViewVehicle, snoozed,
         ) : (
             <>
                 <ReminderSection title="Overdue" items={reminders.overdue} category="overdue" />
-                <ReminderSection title="EMIs Due Today & Tomorrow" items={reminders.dueTomorrowEmis} category="dueTomorrowEmis" />
+                <ReminderSection title="EMIs Due Today" items={reminders.dueTomorrowEmis} category="dueTomorrowEmis" />
                 <ReminderSection title="Documents Due Today & Tomorrow" items={reminders.today} category="today" />
                 
                 {!reminders.overdue.length && !reminders.dueTomorrowEmis.length && !reminders.today.length && (
@@ -241,8 +250,8 @@ const Dashboard: React.FC<DashboardProps> = ({ vehicles, onViewVehicle, snoozed,
                     </div>
                 )}
                 
-                <ReminderSection title="Documents Due Day After Tomorrow" items={reminders.tomorrow} category="tomorrow" />
-                <ReminderSection title="Upcoming Documents" items={reminders.upcoming} category="upcoming" />
+                <ReminderSection title="Due Day After Tomorrow" items={reminders.tomorrow} category="tomorrow" />
+                <ReminderSection title="Upcoming" items={reminders.upcoming} category="upcoming" />
                 
                  {!hasAnyReminders && (
                     <div className="text-center py-16 bg-slate-800 rounded-lg">
