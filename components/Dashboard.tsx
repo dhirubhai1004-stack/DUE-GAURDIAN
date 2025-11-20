@@ -232,7 +232,7 @@ const Dashboard: React.FC<DashboardProps> = ({ vehicles, onViewVehicle, snoozed,
         ) : (
             <>
                 <ReminderSection title="Overdue" items={reminders.overdue} category="overdue" />
-                <ReminderSection title="EMIs Due Soon" items={reminders.dueTomorrowEmis} category="dueTomorrowEmis" />
+                <ReminderSection title="EMIs Due Today & Tomorrow" items={reminders.dueTomorrowEmis} category="dueTomorrowEmis" />
                 <ReminderSection title="Documents Due Today & Tomorrow" items={reminders.today} category="today" />
                 
                 {!reminders.overdue.length && !reminders.dueTomorrowEmis.length && !reminders.today.length && (
