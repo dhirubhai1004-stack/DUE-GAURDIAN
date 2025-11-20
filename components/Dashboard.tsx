@@ -1,8 +1,3 @@
-
-
-
-
-
 import React from 'react';
 import { Vehicle, ReminderItem, ReminderCategory, Emi, Document as DocType, VehicleType } from '../types';
 import { CarIcon, TruckIcon, BikeIcon, MachineIcon, DocumentIcon, EmiIcon, SnoozeIcon, OtherVehicleIcon, CheckCircleIcon, PersonalLoanIcon, BusinessLoanIcon, HomeLoanIcon } from './icons';
@@ -23,6 +18,13 @@ const formatDate = (dateString?: string): string => {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const year = String(date.getFullYear()).slice(-2);
   return `${day}/${month}/${year}`;
+};
+
+const toYMD = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 };
 
 const getVehicleIcon = (type: string) => {
@@ -77,7 +79,7 @@ const ReminderCard: React.FC<{
                         <button 
                             onClick={(e) => { e.stopPropagation(); onSnoozeItem(item.item.id); }} 
                             className="p-1.5 text-slate-400 hover:text-white rounded-full hover:bg-slate-700/50 transition-colors"
-                            title="Remind tomorrow"
+                            title="Remind later"
                         >
                             <SnoozeIcon className="w-5 h-5" />
                         </button>
@@ -122,13 +124,18 @@ const ReminderCard: React.FC<{
 
 const Dashboard: React.FC<DashboardProps> = ({ vehicles, onViewVehicle, snoozed, onSnoozeItem, onMarkEmiPaid }) => {
     const reminders = React.useMemo(() => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const tomorrow = new Date(today);
-        tomorrow.setDate(today.getDate() + 1);
-
-        const now = Date.now();
+        const now = new Date();
+        const todayStr = toYMD(now);
+        
+        const tomorrow = new Date(now); 
+        tomorrow.setDate(now.getDate() + 1);
+        const tomorrowStr = toYMD(tomorrow);
+        
+        const dayAfter = new Date(now); 
+        dayAfter.setDate(now.getDate() + 2);
+        const dayAfterStr = toYMD(dayAfter);
+        
+        const nowTimestamp = Date.now();
 
         const categorized: Record<ReminderCategory, ReminderItem[]> = {
             overdue: [],
@@ -139,39 +146,57 @@ const Dashboard: React.FC<DashboardProps> = ({ vehicles, onViewVehicle, snoozed,
         };
 
         vehicles.forEach(vehicle => {
+            // EMIs Logic
             vehicle.emis.forEach(emi => {
-                if (emi.paidInstallments >= emi.totalTenure) return; // Skip fully paid EMIs
+                if (emi.paidInstallments >= emi.totalTenure) return; // Skip fully paid
                 
                 const snoozedUntil = snoozed[emi.id];
-                if (snoozedUntil && now < snoozedUntil) return;
+                if (snoozedUntil && nowTimestamp < snoozedUntil) return;
 
-                const startDate = new Date(emi.startDate);
-                const nextDueDate = new Date(startDate.getFullYear(), startDate.getMonth() + emi.paidInstallments, startDate.getDate());
+                // Calculate next due date safely using YYYY-MM-DD components
+                const [sY, sM, sD] = emi.startDate.split('-').map(Number);
+                // Month in Date constructor is 0-indexed
+                const nextDueDateObj = new Date(sY, sM - 1 + emi.paidInstallments, sD);
+                const nextDueStr = toYMD(nextDueDateObj);
                 
-                const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + emi.totalTenure, startDate.getDate());
+                const endDateObj = new Date(sY, sM - 1 + emi.totalTenure, sD);
                 
                 const reminderItem: ReminderItem = { 
                     vehicle, 
                     item: emi, 
                     type: 'EMI', 
-                    date: nextDueDate.toISOString().split('T')[0],
-                    endDate: endDate.toISOString().split('T')[0]
+                    date: nextDueStr,
+                    endDate: toYMD(endDateObj)
                 };
 
-                if (nextDueDate < today) categorized.overdue.push(reminderItem);
-                else if (nextDueDate.getTime() === tomorrow.getTime()) categorized.dueTomorrowEmis.push(reminderItem);
+                if (nextDueStr < todayStr) {
+                    categorized.overdue.push(reminderItem);
+                } else if (nextDueStr === todayStr || nextDueStr === tomorrowStr) {
+                    // Group EMIs due Today and Tomorrow together
+                    categorized.dueTomorrowEmis.push(reminderItem);
+                }
             });
+
+            // Documents Logic
             vehicle.documents.forEach(doc => {
                 const snoozedUntil = snoozed[doc.id];
-                if (snoozedUntil && now < snoozedUntil) return;
+                if (snoozedUntil && nowTimestamp < snoozedUntil) return;
 
-                const expiryDate = new Date(doc.expiryDate);
                 const reminderItem: ReminderItem = { vehicle, item: doc, type: 'Document', date: doc.expiryDate };
+                const expiryStr = doc.expiryDate; // Assuming YYYY-MM-DD format
                 
-                if (expiryDate < today) categorized.overdue.push(reminderItem);
-                else if (expiryDate.getTime() === today.getTime()) categorized.today.push(reminderItem);
-                else if (expiryDate.getTime() === tomorrow.getTime()) categorized.tomorrow.push(reminderItem);
-                else categorized.upcoming.push(reminderItem);
+                if (expiryStr < todayStr) {
+                    categorized.overdue.push(reminderItem);
+                } else if (expiryStr === todayStr || expiryStr === tomorrowStr) {
+                    // "Tomorrow expiring should in Today"
+                    categorized.today.push(reminderItem);
+                } else if (expiryStr === dayAfterStr) {
+                    // "Day after tomorrow should be in Tomorrow"
+                    categorized.tomorrow.push(reminderItem);
+                } else if (expiryStr > dayAfterStr) {
+                    // "All expiring in next 5 days from day after tomorrow should be in Upcoming"
+                    categorized.upcoming.push(reminderItem);
+                }
             });
         });
         
@@ -194,7 +219,6 @@ const Dashboard: React.FC<DashboardProps> = ({ vehicles, onViewVehicle, snoozed,
         );
     };
     
-    // FIX: Add an Array.isArray type guard to handle cases where TypeScript infers the array elements as `unknown`.
     const hasAnyReminders = Object.values(reminders).some(arr => Array.isArray(arr) && arr.length > 0);
 
   return (
@@ -208,16 +232,16 @@ const Dashboard: React.FC<DashboardProps> = ({ vehicles, onViewVehicle, snoozed,
         ) : (
             <>
                 <ReminderSection title="Overdue" items={reminders.overdue} category="overdue" />
-                <ReminderSection title="EMIs Due Tomorrow" items={reminders.dueTomorrowEmis} category="dueTomorrowEmis" />
-                <ReminderSection title="Documents Due Today" items={reminders.today} category="today" />
+                <ReminderSection title="EMIs Due Soon" items={reminders.dueTomorrowEmis} category="dueTomorrowEmis" />
+                <ReminderSection title="Documents Due Today & Tomorrow" items={reminders.today} category="today" />
                 
                 {!reminders.overdue.length && !reminders.dueTomorrowEmis.length && !reminders.today.length && (
                      <div className="text-center py-10 my-6 bg-slate-800 rounded-lg border border-slate-700">
-                        <p className="text-slate-300 text-lg">All clear for today! No immediate actions needed. 😊</p>
+                        <p className="text-slate-300 text-lg">All clear for the next 48 hours! 😊</p>
                     </div>
                 )}
                 
-                <ReminderSection title="Documents Due Tomorrow" items={reminders.tomorrow} category="tomorrow" />
+                <ReminderSection title="Documents Due Day After Tomorrow" items={reminders.tomorrow} category="tomorrow" />
                 <ReminderSection title="Upcoming Documents" items={reminders.upcoming} category="upcoming" />
                 
                  {!hasAnyReminders && (
