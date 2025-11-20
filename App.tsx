@@ -36,12 +36,13 @@ const formatDate = (dateString?: string): string => {
 type View = 'dashboard' | 'vehicleList' | 'vehicleDetail';
 
 // Helper components defined outside App to prevent re-renders
-const AddVehicleModal: React.FC<{ 
+const VehicleFormModal: React.FC<{ 
     isOpen: boolean; 
     onClose: () => void; 
-    onAddVehicle: (vehicle: Omit<Vehicle, 'id' | 'documents' | 'emis' | 'archivedDocuments'>) => void; 
+    onSave: (vehicle: Omit<Vehicle, 'id' | 'documents' | 'emis' | 'archivedDocuments'>) => void; 
     mode: 'asset' | 'loan';
-}> = ({ isOpen, onClose, onAddVehicle, mode }) => {
+    initialData?: Vehicle | null;
+}> = ({ isOpen, onClose, onSave, mode, initialData }) => {
     const [make, setMake] = useState('');
     const [model, setModel] = useState('');
     const [regNum, setRegNum] = useState('');
@@ -53,14 +54,28 @@ const AddVehicleModal: React.FC<{
 
     useEffect(() => {
         if (isOpen) {
-            // Reset state and set default type based on mode
-            setMake('');
-            setModel('');
-            setRegNum('');
-            setCustomType('');
-            setType(mode === 'asset' ? VehicleType.Car : VehicleType.PersonalLoan);
+            if (initialData) {
+                setMake(initialData.make);
+                setModel(initialData.model);
+                setRegNum(initialData.registrationNumber);
+                
+                const isKnownType = [...assetTypes, ...loanTypes].includes(initialData.type as any);
+                if (isKnownType && initialData.type !== VehicleType.Other) {
+                    setType(initialData.type);
+                    setCustomType('');
+                } else {
+                    setType(VehicleType.Other);
+                    setCustomType(initialData.type);
+                }
+            } else {
+                setMake('');
+                setModel('');
+                setRegNum('');
+                setCustomType('');
+                setType(mode === 'asset' ? VehicleType.Car : VehicleType.PersonalLoan);
+            }
         }
-    }, [isOpen, mode]);
+    }, [isOpen, mode, initialData]);
 
     const availableTypes = mode === 'asset' ? assetTypes : loanTypes;
     const isLoanMode = mode === 'loan';
@@ -68,14 +83,16 @@ const AddVehicleModal: React.FC<{
     const placeholderMake = isLoanMode ? "Lender / Bank Name (e.g., HDFC)" : "Make (e.g., Honda)";
     const placeholderModel = isLoanMode ? "Loan Purpose / Name (e.g., Home Renovation)" : "Model (e.g., Civic)";
     const placeholderReg = isLoanMode ? "Loan Account Number" : "Registration Number";
-    const buttonText = isLoanMode ? "Add Loan" : "Add Vehicle/Asset";
-    const titleText = isLoanMode ? "Add New Loan" : "Add New Asset";
+    const buttonText = initialData ? "Save Changes" : (isLoanMode ? "Add Loan" : "Add Vehicle/Asset");
+    const titleText = initialData 
+        ? (isLoanMode ? "Edit Loan Details" : "Edit Asset Details")
+        : (isLoanMode ? "Add New Loan" : "Add New Asset");
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const finalType = type === VehicleType.Other ? customType : type;
         if (!make || !model || !regNum || !finalType) return;
-        onAddVehicle({ make, model, registrationNumber: regNum.toUpperCase(), type: finalType });
+        onSave({ make, model, registrationNumber: regNum.toUpperCase(), type: finalType });
         onClose();
     };
 
@@ -100,6 +117,44 @@ const AddVehicleModal: React.FC<{
         </Modal>
     );
 };
+
+const DeleteVehicleModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onConfirm: (reason: string) => void;
+    vehicleName: string;
+}> = ({ isOpen, onClose, onConfirm, vehicleName }) => {
+    const [reason, setReason] = useState('');
+
+    useEffect(() => { if (isOpen) setReason(''); }, [isOpen]);
+
+    const handleSubmit = () => {
+        if (!reason.trim()) return;
+        onConfirm(reason);
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Delete Item">
+            <div className="space-y-4">
+                <p className="text-slate-300">Are you sure you want to delete <span className="font-bold text-white">{vehicleName}</span>? This action cannot be undone and will remove all associated documents and EMIs.</p>
+                <div>
+                    <label className="block text-sm font-medium text-slate-400 mb-1">Reason for Deletion</label>
+                    <textarea 
+                        value={reason} 
+                        onChange={e => setReason(e.target.value)} 
+                        placeholder="e.g., Sold, Loan Closed, Scrapped"
+                        className="w-full p-2 bg-slate-700 border border-slate-600 rounded min-h-[80px]"
+                        required
+                    />
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                    <button onClick={onClose} className="bg-slate-600 hover:bg-slate-700 p-2 px-4 rounded text-white font-bold">Cancel</button>
+                    <button onClick={handleSubmit} disabled={!reason.trim()} className="bg-red-600 hover:bg-red-700 disabled:bg-slate-600 disabled:cursor-not-allowed p-2 px-4 rounded text-white font-bold">Delete</button>
+                </div>
+            </div>
+        </Modal>
+    );
+}
 
 const EmiFormModal: React.FC<{ 
     isOpen: boolean; 
@@ -514,7 +569,9 @@ const VehicleDetail: React.FC<{
     onMarkEmiPaid: (emiId: string) => void;
     onOpenSettleModal: (emi: Emi) => void;
     onEditEmiClick: (emi: Emi | null) => void;
-}> = ({ vehicle, onBack, onAddDoc, onUpdateDoc, onDeleteDoc, onMarkEmiPaid, onOpenSettleModal, onEditEmiClick }) => {
+    onEditVehicle: () => void;
+    onDeleteVehicle: () => void;
+}> = ({ vehicle, onBack, onAddDoc, onUpdateDoc, onDeleteDoc, onMarkEmiPaid, onOpenSettleModal, onEditEmiClick, onEditVehicle, onDeleteVehicle }) => {
     const [isDocModalOpen, setDocModalOpen] = useState(false);
     const [docToReplace, setDocToReplace] = useState<Document | null>(null);
     const [docToEdit, setDocToEdit] = useState<Document | null>(null);
@@ -567,11 +624,21 @@ const VehicleDetail: React.FC<{
                 <ArrowLeftIcon className="w-6 h-6" />
                 <span>All Items</span>
             </button>
-            <div className="bg-slate-800 p-4 rounded-lg flex items-center space-x-4 mb-6">
-                {getVehicleIcon(vehicle.type)}
-                <div>
-                    <h1 className="text-2xl font-bold">{vehicle.make} {vehicle.model}</h1>
-                    <p className="text-slate-400">{vehicle.registrationNumber}</p>
+            <div className="bg-slate-800 p-4 rounded-lg flex justify-between items-start mb-6">
+                <div className="flex items-center space-x-4">
+                    {getVehicleIcon(vehicle.type)}
+                    <div>
+                        <h1 className="text-2xl font-bold">{vehicle.make} {vehicle.model}</h1>
+                        <p className="text-slate-400">{vehicle.registrationNumber}</p>
+                    </div>
+                </div>
+                <div className="flex gap-2">
+                     <button onClick={onEditVehicle} className="p-2 text-slate-400 hover:text-white rounded-full bg-slate-700/50 hover:bg-slate-700 transition-colors" title="Edit Details">
+                        <EditIcon className="w-5 h-5" />
+                    </button>
+                     <button onClick={onDeleteVehicle} className="p-2 text-slate-400 hover:text-red-400 rounded-full bg-slate-700/50 hover:bg-slate-700 transition-colors" title="Delete Item">
+                        <DeleteIcon className="w-5 h-5" />
+                    </button>
                 </div>
             </div>
 
@@ -933,8 +1000,12 @@ const App: React.FC = () => {
     const [snoozed, setSnoozed] = useLocalStorage<Record<string, number>>('snoozedReminders', {});
     const [view, setView] = useState<View>('dashboard');
     const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
-    const [isAddVehicleModalOpen, setAddVehicleModalOpen] = useState(false);
+    const [isVehicleFormModalOpen, setVehicleFormModalOpen] = useState(false);
     const [addModalMode, setAddModalMode] = useState<'asset' | 'loan'>('asset');
+    const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
+    const [isDeleteVehicleModalOpen, setDeleteVehicleModalOpen] = useState(false);
+    const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null);
+
     const [isEmiModalOpen, setEmiModalOpen] = useState(false);
     const [editingEmi, setEditingEmi] = useState<Emi | null>(null);
     const [installPrompt, setInstallPrompt] = useState<any>(null);
@@ -1071,15 +1142,21 @@ const App: React.FC = () => {
     }, [vehicles, snoozed]);
 
 
-    const handleAddVehicle = (vehicleData: Omit<Vehicle, 'id' | 'documents' | 'emis' | 'archivedDocuments'>) => {
-        const newVehicle: Vehicle = {
-            ...vehicleData,
-            id: crypto.randomUUID(),
-            documents: [],
-            emis: [],
-            archivedDocuments: []
-        };
-        setVehicles(prev => [...prev, newVehicle]);
+    const handleSaveVehicle = (vehicleData: Omit<Vehicle, 'id' | 'documents' | 'emis' | 'archivedDocuments'>) => {
+        if (editingVehicle) {
+             setVehicles(prev => prev.map(v => v.id === editingVehicle.id ? { ...v, ...vehicleData } : v));
+             setEditingVehicle(null);
+        } else {
+            const newVehicle: Vehicle = {
+                ...vehicleData,
+                id: crypto.randomUUID(),
+                documents: [],
+                emis: [],
+                archivedDocuments: []
+            };
+            setVehicles(prev => [...prev, newVehicle]);
+        }
+        setVehicleFormModalOpen(false);
     };
 
     const handleSelectVehicle = (id: string) => {
@@ -1297,6 +1374,38 @@ const App: React.FC = () => {
             [itemId]: snoozeUntil.getTime()
         }));
     };
+
+    const handleEditVehicle = () => {
+        if (selectedVehicleId) {
+            const v = vehicles.find(veh => veh.id === selectedVehicleId);
+            if (v) {
+                setEditingVehicle(v);
+                setVehicleFormModalOpen(true);
+            }
+        }
+    };
+
+    const handleDeleteVehicleClick = () => {
+        if (selectedVehicleId) {
+            const v = vehicles.find(veh => veh.id === selectedVehicleId);
+            if (v) {
+                setVehicleToDelete(v);
+                setDeleteVehicleModalOpen(true);
+            }
+        }
+    };
+
+    const handleConfirmDeleteVehicle = (reason: string) => {
+        if (!vehicleToDelete) return;
+        // Ideally, log the deletion reason somewhere. For now, we just proceed with deletion.
+        console.log(`Deleting vehicle ${vehicleToDelete.id} - Reason: ${reason}`);
+        
+        setVehicles(prev => prev.filter(v => v.id !== vehicleToDelete.id));
+        setVehicleToDelete(null);
+        setDeleteVehicleModalOpen(false);
+        setSelectedVehicleId(null);
+        setView('vehicleList');
+    };
     
     const selectedVehicle = vehicles.find(v => v.id === selectedVehicleId);
 
@@ -1306,8 +1415,8 @@ const App: React.FC = () => {
                 return <VehicleList 
                             vehicles={vehicles} 
                             onSelectVehicle={handleSelectVehicle} 
-                            onAddAssetClick={() => { setAddModalMode('asset'); setAddVehicleModalOpen(true); }}
-                            onAddLoanClick={() => { setAddModalMode('loan'); setAddVehicleModalOpen(true); }}
+                            onAddAssetClick={() => { setAddModalMode('asset'); setVehicleFormModalOpen(true); setEditingVehicle(null); }}
+                            onAddLoanClick={() => { setAddModalMode('loan'); setVehicleFormModalOpen(true); setEditingVehicle(null); }}
                         />;
             case 'vehicleDetail':
                 if (selectedVehicle) {
@@ -1323,6 +1432,8 @@ const App: React.FC = () => {
                                     setEditingEmi(emi);
                                     setEmiModalOpen(true);
                                 }}
+                                onEditVehicle={handleEditVehicle}
+                                onDeleteVehicle={handleDeleteVehicleClick}
                             />;
                 }
                 setView('vehicleList'); // Fallback if vehicle not found
@@ -1374,7 +1485,7 @@ const App: React.FC = () => {
                 </div>
             </nav>
 
-            <AddVehicleModal isOpen={isAddVehicleModalOpen} onClose={() => setAddVehicleModalOpen(false)} onAddVehicle={handleAddVehicle} mode={addModalMode} />
+            <VehicleFormModal isOpen={isVehicleFormModalOpen} onClose={() => { setVehicleFormModalOpen(false); setEditingVehicle(null); }} onSave={handleSaveVehicle} mode={addModalMode} initialData={editingVehicle} />
             
             {selectedVehicleId && (
                 <EmiFormModal 
@@ -1383,6 +1494,15 @@ const App: React.FC = () => {
                     onSubmit={handleSaveEmi}
                     initialData={editingEmi}
                     vehicleType={selectedVehicle?.type}
+                />
+            )}
+
+            {isDeleteVehicleModalOpen && vehicleToDelete && (
+                <DeleteVehicleModal
+                    isOpen={isDeleteVehicleModalOpen}
+                    onClose={() => { setDeleteVehicleModalOpen(false); setVehicleToDelete(null); }}
+                    onConfirm={handleConfirmDeleteVehicle}
+                    vehicleName={`${vehicleToDelete.make} ${vehicleToDelete.model}`}
                 />
             )}
             
