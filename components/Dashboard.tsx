@@ -1,6 +1,7 @@
-import React from 'react';
-import { Vehicle, ReminderItem, ReminderCategory, Emi, Document as DocType, VehicleType } from '../types';
-import { CarIcon, TruckIcon, BikeIcon, MachineIcon, DocumentIcon, EmiIcon, SnoozeIcon, OtherVehicleIcon, CheckCircleIcon, PersonalLoanIcon, BusinessLoanIcon, HomeLoanIcon } from './icons';
+
+import React, { useState } from 'react';
+import { Vehicle, ReminderItem, ReminderCategory, Emi, Document as DocType } from '../types';
+import { CarIcon, TruckIcon, BikeIcon, MachineIcon, DocumentIcon, EmiIcon, SnoozeIcon, OtherVehicleIcon, CheckCircleIcon, PersonalLoanIcon, BusinessLoanIcon, HomeLoanIcon, ClockIcon, BellIcon, BellSlashIcon } from './icons';
 
 interface DashboardProps {
   vehicles: Vehicle[];
@@ -8,23 +9,18 @@ interface DashboardProps {
   snoozed: Record<string, number>;
   onSnoozeItem: (itemId: string, minutes?: number) => void;
   onMarkEmiPaid: (emi: Emi, vehicleId: string, category: 'overdue' | 'today') => void;
+  onSnoozeAlarm: (emiId: string, vehicleId: string) => void;
+  onSetManualAlarm: (emiId: string, vehicleId: string, time: string) => void;
+  onDismissAlarm: (emiId: string, vehicleId: string) => void;
 }
 
+// Timezone-safe date formatting (Input YYYY-MM-DD -> Output DD/MM/YY)
 const formatDate = (dateString?: string): string => {
   if (!dateString) return '';
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return '';
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = String(date.getFullYear()).slice(-2);
-  return `${day}/${month}/${year}`;
-};
-
-const toYMD = (d: Date) => {
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+  const parts = dateString.split('-');
+  if (parts.length !== 3) return dateString;
+  const [y, m, d] = parts;
+  return `${d}/${m}/${y.slice(-2)}`;
 };
 
 const getVehicleIcon = (type: string) => {
@@ -44,7 +40,6 @@ const getVehicleIcon = (type: string) => {
 const getCategoryStyle = (category: ReminderCategory) => {
     switch (category) {
         case 'overdue': return { bg: 'bg-red-900/50', border: 'border-red-500', text: 'text-red-400' };
-        case 'dueTomorrowEmis':
         case 'today': return { bg: 'bg-amber-900/50', border: 'border-amber-500', text: 'text-amber-400' };
         case 'tomorrow': return { bg: 'bg-sky-900/50', border: 'border-sky-500', text: 'text-sky-400' };
         case 'upcoming': return { bg: 'bg-green-900/50', border: 'border-green-500', text: 'text-green-400' };
@@ -57,12 +52,36 @@ const ReminderCard: React.FC<{
     category: ReminderCategory, 
     onViewVehicle: (vehicleId: string) => void, 
     onSnoozeItem: (itemId: string, minutes?: number) => void,
-    onMarkEmiPaid: (emi: Emi, vehicleId: string, category: 'overdue' | 'today') => void
-}> = ({ item, category, onViewVehicle, onSnoozeItem, onMarkEmiPaid }) => {
+    onMarkEmiPaid: (emi: Emi, vehicleId: string, category: 'overdue' | 'today') => void,
+    onSnoozeAlarm: (emiId: string, vehicleId: string) => void,
+    onSetManualAlarm: (emiId: string, vehicleId: string, time: string) => void,
+    onDismissAlarm: (emiId: string, vehicleId: string) => void,
+}> = ({ item, category, onViewVehicle, onSnoozeItem, onMarkEmiPaid, onSnoozeAlarm, onSetManualAlarm, onDismissAlarm }) => {
     const { bg, border } = getCategoryStyle(category);
+    const [isEditingTime, setIsEditingTime] = useState(false);
+
     const itemTypeIcon = item.type === 'EMI' 
         ? <EmiIcon className="w-5 h-5 text-cyan-400" /> 
         : <DocumentIcon className="w-5 h-5 text-purple-400" />;
+    
+    const isTodayEmi = item.type === 'EMI' && category === 'today';
+    
+    let alarmTimeDisplay = '';
+    let alarmStatus = '';
+    
+    if (isTodayEmi) {
+        const emi = item.item as Emi;
+        if (emi.alarmConfig?.isDismissed) {
+             alarmStatus = 'Alarm Dismissed';
+        } else if (emi.alarmConfig?.nextTrigger) {
+            const date = new Date(emi.alarmConfig.nextTrigger);
+            alarmTimeDisplay = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            if (emi.alarmConfig.snoozeCount > 0) {
+                alarmStatus = `Snoozed (${emi.alarmConfig.snoozeCount})`;
+            }
+        }
+    }
 
     return (
         <div className={`p-4 rounded-lg border ${border} ${bg} flex flex-col space-y-3`}>
@@ -76,13 +95,15 @@ const ReminderCard: React.FC<{
                         <p className="text-sm text-slate-400">{item.vehicle.registrationNumber}</p>
                     </div>
                     <div className="flex items-center space-x-2">
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); onSnoozeItem(item.item.id); }} 
-                            className="p-1.5 text-slate-400 hover:text-white rounded-full hover:bg-slate-700/50 transition-colors"
-                            title="Remind later"
-                        >
-                            <SnoozeIcon className="w-5 h-5" />
-                        </button>
+                        {!isTodayEmi && (
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); onSnoozeItem(item.item.id); }} 
+                                className="p-1.5 text-slate-400 hover:text-white rounded-full hover:bg-slate-700/50 transition-colors"
+                                title="Remind later (Hide)"
+                            >
+                                <SnoozeIcon className="w-5 h-5" />
+                            </button>
+                        )}
                         {itemTypeIcon}
                     </div>
                 </div>
@@ -92,6 +113,64 @@ const ReminderCard: React.FC<{
                     {item.endDate && <p className="text-xs text-slate-400">Loan Ends: {formatDate(item.endDate)}</p>}
                 </div>
             </div>
+            
+            {/* Alarm UI for Today's EMIs (which are effectively Due Tomorrow) */}
+            {isTodayEmi && (
+                <div className="mt-2 pt-2 border-t border-slate-700/50 bg-slate-800/40 p-2 rounded">
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 text-sm">
+                            {alarmStatus === 'Alarm Dismissed' ? <BellSlashIcon className="w-4 h-4 text-slate-500"/> : <BellIcon className="w-4 h-4 text-amber-400"/>}
+                            <span className="text-slate-300">
+                                {alarmStatus === 'Alarm Dismissed' 
+                                    ? 'Alarm Off' 
+                                    : (alarmTimeDisplay ? `Alarm: ${alarmTimeDisplay}` : 'Alarm Not Set')}
+                                {alarmStatus && alarmStatus !== 'Alarm Dismissed' && <span className="text-xs text-amber-400 ml-1">({alarmStatus})</span>}
+                            </span>
+                        </div>
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); setIsEditingTime(!isEditingTime); }}
+                            className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-700"
+                            title="Edit Alarm Time"
+                        >
+                            <ClockIcon className="w-4 h-4" />
+                        </button>
+                    </div>
+                    
+                    {isEditingTime && (
+                         <div className="flex items-center gap-2 mb-2">
+                            <input 
+                                type="time" 
+                                className="bg-slate-700 text-white text-sm rounded p-1 border border-slate-600 outline-none"
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => {
+                                    onSetManualAlarm((item.item as Emi).id, item.vehicle.id, e.target.value);
+                                    setIsEditingTime(false);
+                                }}
+                            />
+                            <span className="text-xs text-slate-400">Set new time</span>
+                        </div>
+                    )}
+
+                    {!(item.item as Emi).alarmConfig?.isDismissed && (
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); onSnoozeAlarm((item.item as Emi).id, item.vehicle.id); }}
+                                className="flex-1 bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center gap-1 transition-colors"
+                            >
+                                <SnoozeIcon className="w-3 h-3" /> Snooze
+                            </button>
+                             <button 
+                                onClick={(e) => { e.stopPropagation(); onDismissAlarm((item.item as Emi).id, item.vehicle.id); }}
+                                className="bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white text-xs font-semibold py-1.5 px-2 rounded flex items-center justify-center gap-1 transition-colors"
+                                title="Stop alarm for today"
+                            >
+                                <BellSlashIcon className="w-3 h-3" />
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+
              {item.type === 'EMI' && category === 'overdue' && (
                 <div className="mt-3 pt-3 border-t border-slate-700/50">
                     <button
@@ -103,7 +182,7 @@ const ReminderCard: React.FC<{
                     </button>
                 </div>
             )}
-            {category === 'dueTomorrowEmis' && (
+            {item.type === 'EMI' && (category === 'today' || category === 'tomorrow') && (
                  <div className="mt-3 pt-3 border-t border-slate-700/50 flex flex-wrap justify-between items-center gap-2">
                     <button
                         onClick={(e) => { e.stopPropagation(); onMarkEmiPaid(item.item as Emi, item.vehicle.id, 'today'); }}
@@ -112,29 +191,23 @@ const ReminderCard: React.FC<{
                         <CheckCircleIcon className="w-5 h-5"/>
                         <span>Mark as Paid</span>
                     </button>
-                    <div className="flex gap-2 flex-grow sm:flex-grow-0 justify-end">
-                         <button title="Remind me in 30 minutes" onClick={(e) => { e.stopPropagation(); onSnoozeItem(item.item.id, 30); }} className="p-2 px-3 text-xs bg-slate-600 hover:bg-slate-700 rounded">30m</button>
-                         <button title="Remind me in 2 hours" onClick={(e) => { e.stopPropagation(); onSnoozeItem(item.item.id, 120); }} className="p-2 px-3 text-xs bg-slate-600 hover:bg-slate-700 rounded">2h</button>
-                    </div>
+                    {!isTodayEmi && (
+                        <div className="flex gap-2 flex-grow sm:flex-grow-0 justify-end">
+                             <button title="Remind me in 30 minutes" onClick={(e) => { e.stopPropagation(); onSnoozeItem(item.item.id, 30); }} className="p-2 px-3 text-xs bg-slate-600 hover:bg-slate-700 rounded">30m</button>
+                             <button title="Remind me in 2 hours" onClick={(e) => { e.stopPropagation(); onSnoozeItem(item.item.id, 120); }} className="p-2 px-3 text-xs bg-slate-600 hover:bg-slate-700 rounded">2h</button>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
     );
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ vehicles, onViewVehicle, snoozed, onSnoozeItem, onMarkEmiPaid }) => {
+const Dashboard: React.FC<DashboardProps> = ({ vehicles, onViewVehicle, snoozed, onSnoozeItem, onMarkEmiPaid, onSnoozeAlarm, onSetManualAlarm, onDismissAlarm }) => {
     const reminders = React.useMemo(() => {
         const now = new Date();
-        const todayStr = toYMD(now);
-        
-        const tomorrow = new Date(now); 
-        tomorrow.setDate(now.getDate() + 1);
-        const tomorrowStr = toYMD(tomorrow);
-        
-        const dayAfter = new Date(now); 
-        dayAfter.setDate(now.getDate() + 2);
-        const dayAfterStr = toYMD(dayAfter);
-        
+        // Normalize to local midnight to ensure we compare calendar days accurately
+        const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const nowTimestamp = Date.now();
 
         const categorized: Record<ReminderCategory, ReminderItem[]> = {
@@ -142,7 +215,6 @@ const Dashboard: React.FC<DashboardProps> = ({ vehicles, onViewVehicle, snoozed,
             today: [],
             tomorrow: [],
             upcoming: [],
-            dueTomorrowEmis: [],
         };
 
         vehicles.forEach(vehicle => {
@@ -150,38 +222,51 @@ const Dashboard: React.FC<DashboardProps> = ({ vehicles, onViewVehicle, snoozed,
             vehicle.emis.forEach(emi => {
                 if (emi.paidInstallments >= emi.totalTenure) return; // Skip fully paid
                 
-                const snoozedUntil = snoozed[emi.id];
-                if (snoozedUntil && nowTimestamp < snoozedUntil) return;
-
-                // Calculate next due date safely using YYYY-MM-DD components
-                let [sY, sM, sD] = emi.startDate.split('-').map(Number);
-                
-                // Fix: Handle 2-digit years (e.g. 0025) by adding 2000. 
-                // This prevents dates like "26/11/25" (Year 0025) from appearing in Overdue.
+                // Parse Start Date safely from YYYY-MM-DD string
+                const [sYStr, sMStr, sDStr] = emi.startDate.split('-');
+                let sY = parseInt(sYStr);
                 if (sY < 100) sY += 2000;
-
-                // Month in Date constructor is 0-indexed
-                const nextDueDateObj = new Date(sY, sM - 1 + emi.paidInstallments, sD);
-                const nextDueStr = toYMD(nextDueDateObj);
                 
-                const endDateObj = new Date(sY, sM - 1 + emi.totalTenure, sD);
+                // Calculate Next Due Date Object (Local Time)
+                const nextDueDate = new Date(sY, parseInt(sMStr) - 1 + emi.paidInstallments, parseInt(sDStr));
+                // Normalize Next Due Date to Midnight for accurate day difference
+                const nextDueDateMidnight = new Date(nextDueDate.getFullYear(), nextDueDate.getMonth(), nextDueDate.getDate());
+                
+                // Calculate formatted string for display/key
+                const nextDueStr = `${nextDueDateMidnight.getFullYear()}-${String(nextDueDateMidnight.getMonth()+1).padStart(2,'0')}-${String(nextDueDateMidnight.getDate()).padStart(2,'0')}`;
+
+                // Calculate End Date
+                const endDateObj = new Date(sY, parseInt(sMStr) - 1 + emi.totalTenure, parseInt(sDStr));
+                const endDateStr = `${endDateObj.getFullYear()}-${String(endDateObj.getMonth()+1).padStart(2,'0')}-${String(endDateObj.getDate()).padStart(2,'0')}`;
                 
                 const reminderItem: ReminderItem = { 
                     vehicle, 
                     item: emi, 
                     type: 'EMI', 
                     date: nextDueStr,
-                    endDate: toYMD(endDateObj)
+                    endDate: endDateStr
                 };
 
-                if (nextDueStr < todayStr) {
+                // Calculate difference in days strictly based on calendar dates
+                const diffTime = nextDueDateMidnight.getTime() - todayMidnight.getTime();
+                const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+                // Application Rules:
+                // 1. Due Date = Today (Diff 0) or earlier -> Overdue
+                // 2. Due Date = Tomorrow (Diff 1) -> Today
+                // 3. Due Date = Day After Tomorrow (Diff 2) -> Tomorrow
+                // 4. Due Date = Next 5 days (Diff 3-7) -> Upcoming
+
+                if (diffDays <= 0) {
+                    if (snoozed[emi.id] && nowTimestamp < snoozed[emi.id]) return;
                     categorized.overdue.push(reminderItem);
-                } else if (nextDueStr === todayStr || nextDueStr === tomorrowStr) {
-                    // Group EMIs due Today and Tomorrow together per user request
-                    categorized.dueTomorrowEmis.push(reminderItem);
-                } else if (nextDueStr === dayAfterStr) {
+                } else if (diffDays === 1) {
+                    categorized.today.push(reminderItem);
+                } else if (diffDays === 2) {
+                    if (snoozed[emi.id] && nowTimestamp < snoozed[emi.id]) return;
                     categorized.tomorrow.push(reminderItem);
-                } else if (nextDueStr > dayAfterStr) {
+                } else if (diffDays >= 3 && diffDays <= 7) {
+                    if (snoozed[emi.id] && nowTimestamp < snoozed[emi.id]) return;
                     categorized.upcoming.push(reminderItem);
                 }
             });
@@ -191,19 +276,24 @@ const Dashboard: React.FC<DashboardProps> = ({ vehicles, onViewVehicle, snoozed,
                 const snoozedUntil = snoozed[doc.id];
                 if (snoozedUntil && nowTimestamp < snoozedUntil) return;
 
+                // Parse Expiry Date
+                const [eY, eM, eD] = doc.expiryDate.split('-').map(Number);
+                const expiryDateMidnight = new Date(eY, eM - 1, eD);
+                // Normalize to midnight logic already implicit with (y, m, d) constructor, but good to match flow
+                expiryDateMidnight.setHours(0, 0, 0, 0);
+
+                const diffTime = expiryDateMidnight.getTime() - todayMidnight.getTime();
+                const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
                 const reminderItem: ReminderItem = { vehicle, item: doc, type: 'Document', date: doc.expiryDate };
-                const expiryStr = doc.expiryDate; // Assuming YYYY-MM-DD format
                 
-                if (expiryStr < todayStr) {
+                if (diffDays <= 0) {
                     categorized.overdue.push(reminderItem);
-                } else if (expiryStr === todayStr || expiryStr === tomorrowStr) {
-                    // "Tomorrow expiring should in Today"
+                } else if (diffDays === 1) {
                     categorized.today.push(reminderItem);
-                } else if (expiryStr === dayAfterStr) {
-                    // "Day after tomorrow should be in Tomorrow"
+                } else if (diffDays === 2) {
                     categorized.tomorrow.push(reminderItem);
-                } else if (expiryStr > dayAfterStr) {
-                    // "All expiring in next 5 days from day after tomorrow should be in Upcoming"
+                } else if (diffDays >= 3 && diffDays <= 7) {
                     categorized.upcoming.push(reminderItem);
                 }
             });
@@ -222,7 +312,7 @@ const Dashboard: React.FC<DashboardProps> = ({ vehicles, onViewVehicle, snoozed,
             <div className="mb-8">
                 <h2 className={`text-2xl font-bold mb-4 ${text}`}>{title} ({items.length})</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {items.map(item => <ReminderCard key={`${item.vehicle.id}-${item.item.id}`} item={item} category={category} onViewVehicle={onViewVehicle} onSnoozeItem={onSnoozeItem} onMarkEmiPaid={onMarkEmiPaid} />)}
+                    {items.map(item => <ReminderCard key={`${item.vehicle.id}-${item.item.id}`} item={item} category={category} onViewVehicle={onViewVehicle} onSnoozeItem={onSnoozeItem} onMarkEmiPaid={onMarkEmiPaid} onSnoozeAlarm={onSnoozeAlarm} onSetManualAlarm={onSetManualAlarm} onDismissAlarm={onDismissAlarm} />)}
                 </div>
             </div>
         );
@@ -241,22 +331,21 @@ const Dashboard: React.FC<DashboardProps> = ({ vehicles, onViewVehicle, snoozed,
         ) : (
             <>
                 <ReminderSection title="Overdue" items={reminders.overdue} category="overdue" />
-                <ReminderSection title="EMIs Due Today" items={reminders.dueTomorrowEmis} category="dueTomorrowEmis" />
-                <ReminderSection title="Documents Due Today & Tomorrow" items={reminders.today} category="today" />
+                <ReminderSection title="Due Today" items={reminders.today} category="today" />
+                <ReminderSection title="Due Tomorrow" items={reminders.tomorrow} category="tomorrow" />
                 
-                {!reminders.overdue.length && !reminders.dueTomorrowEmis.length && !reminders.today.length && (
+                {!reminders.overdue.length && !reminders.today.length && !reminders.tomorrow.length && (
                      <div className="text-center py-10 my-6 bg-slate-800 rounded-lg border border-slate-700">
-                        <p className="text-slate-300 text-lg">All clear for the next 48 hours! 😊</p>
+                        <p className="text-slate-300 text-lg">All clear for the next 3 days! 😊</p>
                     </div>
                 )}
                 
-                <ReminderSection title="Due Day After Tomorrow" items={reminders.tomorrow} category="tomorrow" />
-                <ReminderSection title="Upcoming" items={reminders.upcoming} category="upcoming" />
+                <ReminderSection title="Upcoming (Next 5 Days)" items={reminders.upcoming} category="upcoming" />
                 
                  {!hasAnyReminders && (
                     <div className="text-center py-16 bg-slate-800 rounded-lg">
                         <p className="text-slate-400">All caught up!</p>
-                        <p className="text-slate-500">No reminders are due. Snoozed items will reappear later.</p>
+                        <p className="text-slate-500">No reminders are due soon. Check the Items list for full details.</p>
                     </div>
                 )}
             </>

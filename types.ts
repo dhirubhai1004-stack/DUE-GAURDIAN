@@ -40,6 +40,22 @@ export interface EmiPayment {
   bounceCharges?: number;
 }
 
+export interface AlarmLog {
+  timestamp: string;
+  action: 'ring' | 'snooze' | 'manual_set' | 'dismiss';
+  details?: string;
+}
+
+export interface EmiAlarmConfig {
+  date: string; // YYYY-MM-DD, tracks which day this config is valid for
+  nextTrigger: string; // ISO string
+  snoozeCount: number;
+  manualTime?: string; // HH:mm
+  hasRung: boolean;
+  isDismissed: boolean;
+  history: AlarmLog[];
+}
+
 export interface Emi {
   id: string;
   startDate: string; // YYYY-MM-DD of the first EMI
@@ -60,6 +76,7 @@ export interface Emi {
     date: string;
   };
   paymentHistory?: EmiPayment[];
+  alarmConfig?: EmiAlarmConfig;
 }
 
 export interface Vehicle {
@@ -81,4 +98,4 @@ export type ReminderItem = {
   endDate?: string; // Only for EMIs
 };
 
-export type ReminderCategory = 'overdue' | 'today' | 'tomorrow' | 'upcoming' | 'dueTomorrowEmis';
+export type ReminderCategory = 'overdue' | 'today' | 'tomorrow' | 'upcoming';

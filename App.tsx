@@ -1,12 +1,10 @@
 
-
-
 import React, { useState, useEffect } from 'react';
 import useLocalStorage from './hooks/useLocalStorage';
-import { Vehicle, VehicleType, Emi, Document, PREDEFINED_DOC_NAMES, EmiPayment } from './types';
+import { Vehicle, VehicleType, Emi, Document, PREDEFINED_DOC_NAMES, EmiPayment, AlarmLog } from './types';
 import Dashboard from './components/Dashboard';
 import Modal from './components/Modal';
-import { PlusIcon, ArrowLeftIcon, CarIcon, TruckIcon, MachineIcon, BikeIcon, DashboardIcon, VehicleIcon, DownloadIcon, EditIcon, DeleteIcon, CheckCircleIcon, OtherVehicleIcon, PersonalLoanIcon, BusinessLoanIcon, HomeLoanIcon, LogoutIcon } from './components/icons';
+import { PlusIcon, ArrowLeftIcon, CarIcon, TruckIcon, MachineIcon, BikeIcon, DashboardIcon, VehicleIcon, DownloadIcon, EditIcon, DeleteIcon, CheckCircleIcon, OtherVehicleIcon, PersonalLoanIcon, BusinessLoanIcon, HomeLoanIcon, LogoutIcon, SettingsIcon } from './components/icons';
 import AddToHomeScreenPrompt from './components/AddToHomeScreenPrompt';
 
 const vehicleTypeIcons: Record<string, React.ReactNode> = {
@@ -24,14 +22,13 @@ const getVehicleIcon = (type: string) => {
     return vehicleTypeIcons[type] || <OtherVehicleIcon className="w-8 h-8 text-gray-400" />;
 }
 
+// Timezone-safe formatting (DD/MM/YY)
 const formatDate = (dateString?: string): string => {
   if (!dateString) return '';
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return 'Invalid Date';
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = String(date.getFullYear()).slice(-2);
-  return `${day}/${month}/${year}`;
+  const parts = dateString.split('-');
+  if (parts.length !== 3) return dateString;
+  const [y, m, d] = parts;
+  return `${d}/${m}/${y.slice(-2)}`;
 };
 
 
@@ -211,7 +208,8 @@ const EmiFormModal: React.FC<{
             if (!isNaN(tenureNum) && tenureNum > 0) {
                 const start = new Date(startDate);
                 const end = new Date(start.getFullYear(), start.getMonth() + tenureNum, start.getDate());
-                setCalculatedEndDate(formatDate(end.toISOString()));
+                const endYMD = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`;
+                setCalculatedEndDate(formatDate(endYMD));
             } else {
                 setCalculatedEndDate(null);
             }
@@ -684,10 +682,14 @@ const VehicleDetail: React.FC<{
 
                         const nextDueDate = new Date(sY, sM - 1 + emi.paidInstallments, sD);
                         const endDate = new Date(sY, sM - 1 + emi.totalTenure, sD);
+                        const dueDateStr = `${nextDueDate.getFullYear()}-${String(nextDueDate.getMonth()+1).padStart(2,'0')}-${String(nextDueDate.getDate()).padStart(2,'0')}`;
+                        const endDateStr = `${endDate.getFullYear()}-${String(endDate.getMonth()+1).padStart(2,'0')}-${String(endDate.getDate()).padStart(2,'0')}`;
 
                         const today = new Date();
                         today.setHours(0, 0, 0, 0);
-                        const isBeforeToday = nextDueDate < today;
+                        // Compare time to ignore timezone issues
+                        const isBeforeToday = nextDueDate.getTime() < today.getTime();
+                        
                         const monthsDiff = (nextDueDate.getFullYear() - today.getFullYear()) * 12 + nextDueDate.getMonth() - today.getMonth();
                         const isPayAllowed = isBeforeToday || monthsDiff <= 1;
 
@@ -696,8 +698,8 @@ const VehicleDetail: React.FC<{
                             <div className="flex justify-between items-start">
                                 <div>
                                     <p className="font-semibold text-xl text-white">₹ {emi.amount.toLocaleString()}</p>
-                                    <p className="text-sm text-slate-300">Next Due: {formatDate(nextDueDate.toISOString())}</p>
-                                    <p className="text-xs text-slate-400">Ends on: {formatDate(endDate.toISOString())}</p>
+                                    <p className="text-sm text-slate-300">Next Due: {formatDate(dueDateStr)}</p>
+                                    <p className="text-xs text-slate-400">Ends on: {formatDate(endDateStr)}</p>
                                 </div>
                                 <div className="text-right">
                                     <span className="text-xs bg-cyan-900/50 text-cyan-300 px-2 py-1 rounded-full">{emi.paidInstallments} / {emi.totalTenure} paid</span>
@@ -762,7 +764,8 @@ const VehicleDetail: React.FC<{
                         const today = new Date();
                         today.setHours(0, 0, 0, 0);
                         const expiry = new Date(doc.expiryDate);
-                        const isExpired = expiry < today;
+                        // Use getTime to compare properly
+                        const isExpired = expiry.getTime() < today.getTime();
                         const timeDiff = expiry.getTime() - today.getTime();
                         const daysUntilExpiry = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
                         const isExpiringSoon = !isExpired && daysUntilExpiry <= 5;
@@ -836,39 +839,6 @@ const VehicleDetail: React.FC<{
                                     </details>
                                 </div>
                             ))}
-                        </div>
-                    </details>
-                </div>
-            )}
-            
-             {/* Archived Documents Section */}
-            {(vehicle.archivedDocuments && vehicle.archivedDocuments.length > 0) && (
-                <div>
-                    <details className="bg-slate-800/30 rounded-lg">
-                        <summary className="text-lg font-bold text-slate-400 p-4 cursor-pointer">Archived Documents ({vehicle.archivedDocuments.length})</summary>
-                        <div className="p-4 border-t border-slate-700 space-y-4">
-                        {Object.keys(archivedDocsByYear).sort((a,b) => parseInt(b) - parseInt(a)).map(year => (
-                            <div key={year}>
-                                <h4 className="font-bold text-indigo-400 mb-2">{year} Archives</h4>
-                                <div className="space-y-2">
-                                    {archivedDocsByYear[year].map(doc => (
-                                         <div key={doc.id} className="bg-slate-800/50 p-3 rounded-lg flex justify-between items-center">
-                                            <div>
-                                               <p className="font-semibold text-slate-400">{doc.name}</p>
-                                                <p className="text-sm text-slate-500">
-                                                    Valid: {formatDate(doc.validFrom)} to {formatDate(doc.expiryDate)}
-                                                </p>
-                                            </div>
-                                            {doc.fileData && (
-                                                <a href={doc.fileData} download={doc.fileName} className="text-indigo-500 hover:text-indigo-400 p-2 rounded-full">
-                                                    <DownloadIcon className="w-5 h-5" />
-                                                </a>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
                         </div>
                     </details>
                 </div>
@@ -1021,6 +991,84 @@ const ConfirmationModal: React.FC<{
     );
 };
 
+const SettingsModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    reminderTime: string;
+    onTimeChange: (time: string) => void;
+    onLogout: () => void;
+}> = ({ isOpen, onClose, reminderTime, onTimeChange, onLogout }) => {
+    // Parse current time for default values
+    const [h, m] = (reminderTime || '11:00').split(':').map(Number);
+    const currentPeriod = h >= 12 ? 'PM' : 'AM';
+    const currentHour12 = h % 12 || 12;
+    const currentHourStr = String(currentHour12).padStart(2, '0');
+    const currentMinuteStr = String(m).padStart(2, '0');
+
+    const handleTimeUpdate = (newH: string, newM: string, newP: string) => {
+        let hour = parseInt(newH, 10);
+        if (newP === 'PM' && hour !== 12) hour += 12;
+        if (newP === 'AM' && hour === 12) hour = 0;
+        const timeStr = `${String(hour).padStart(2, '0')}:${newM}`;
+        onTimeChange(timeStr);
+    };
+
+    const hours = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+    const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+
+    return (
+         <Modal isOpen={isOpen} onClose={onClose} title="Settings">
+            <div className="space-y-6">
+                <div>
+                    <h3 className="text-lg font-semibold text-white mb-2">Notifications</h3>
+                    <label className="block text-sm text-slate-400 mb-2">Default Reminder Time</label>
+                    
+                    <div className="flex items-center gap-2 bg-slate-700 border border-slate-600 rounded p-2">
+                         <select 
+                            value={currentHourStr} 
+                            onChange={(e) => handleTimeUpdate(e.target.value, currentMinuteStr, currentPeriod)}
+                            className="bg-transparent text-white outline-none appearance-none text-center w-16 font-bold text-lg cursor-pointer"
+                        >
+                            {hours.map(h => <option key={h} value={h} className="bg-slate-800">{h}</option>)}
+                        </select>
+                        <span className="text-white font-bold">:</span>
+                        <select 
+                            value={currentMinuteStr} 
+                            onChange={(e) => handleTimeUpdate(currentHourStr, e.target.value, currentPeriod)}
+                            className="bg-transparent text-white outline-none appearance-none text-center w-16 font-bold text-lg cursor-pointer"
+                        >
+                            {minutes.map(m => <option key={m} value={m} className="bg-slate-800">{m}</option>)}
+                        </select>
+                        <select 
+                            value={currentPeriod} 
+                            onChange={(e) => handleTimeUpdate(currentHourStr, currentMinuteStr, e.target.value)}
+                            className="bg-transparent text-white outline-none appearance-none text-center w-16 font-bold text-lg cursor-pointer ml-auto"
+                        >
+                            <option value="AM" className="bg-slate-800">AM</option>
+                            <option value="PM" className="bg-slate-800">PM</option>
+                        </select>
+                    </div>
+
+                    <p className="text-xs text-slate-500 mt-2">
+                        This is the default time for new daily reminders. You can set specific times for items due today on the dashboard.
+                    </p>
+                </div>
+                
+                <div className="pt-4 border-t border-slate-700">
+                     <h3 className="text-lg font-semibold text-white mb-2">Account</h3>
+                     <button onClick={onLogout} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded flex items-center justify-center gap-2">
+                        <LogoutIcon className="w-5 h-5" />
+                        <span>Logout / Switch Profile</span>
+                     </button>
+                     <p className="text-xs text-slate-500 mt-2 text-center">
+                        Logs out the current session. You can add a new profile or login to another account from the login screen.
+                     </p>
+                </div>
+            </div>
+         </Modal>
+    );
+}
+
 const Login: React.FC<{ onLogin: (user: string) => void }> = ({ onLogin }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [username, setUsername] = useState('');
@@ -1079,9 +1127,9 @@ const Login: React.FC<{ onLogin: (user: string) => void }> = ({ onLogin }) => {
                 <rect width="512" height="512" rx="96" fill="#1E293B" fillOpacity="0"/>
                 <path d="M256 74.6667L96 154.667V256C96 364.533 165.76 430.4 256 448C346.24 430.4 416 364.533 416 256V154.667L256 74.6667Z" stroke="currentColor" strokeWidth="24" strokeLinecap="round" strokeLinejoin="round"/>
                 <rect x="181" y="200" width="150" height="120" rx="10" stroke="white" strokeWidth="16"/>
-                <path d="M181 240H331" stroke="white" strokeWidth="16" strokeLinecap="round"/>
-                <path d="M221 180V220" stroke="white" strokeWidth="16" strokeLinecap="round"/>
-                <path d="M291 180V220" stroke="white" strokeWidth="16" strokeLinecap="round"/>
+                <path d="M181 240H331" stroke="white" stroke-width="16" strokeLinecap="round"/>
+                <path d="M221 180V220" stroke="white" stroke-width="16" strokeLinecap="round"/>
+                <path d="M291 180V220" stroke="white" stroke-width="16" strokeLinecap="round"/>
             </svg>
             <h1 className="text-3xl font-bold text-white">Due Guardian</h1>
           </div>
@@ -1123,6 +1171,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
     // Key localStorage by currentUser to separate data
     const [vehicles, setVehicles] = useLocalStorage<Vehicle[]>(`${currentUser}_vehicles`, []);
     const [snoozed, setSnoozed] = useLocalStorage<Record<string, number>>(`${currentUser}_snoozedReminders`, {});
+    const [settings, setSettings] = useLocalStorage<{ reminderTime: string }>(`${currentUser}_settings`, { reminderTime: '11:00' });
     
     const [view, setView] = useState<View>('dashboard');
     const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
@@ -1140,6 +1189,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
     const [paymentModalData, setPaymentModalData] = useState<{emi: Emi, vehicleId: string, type: 'overdue' | 'today'} | null>(null);
     const [settleModalData, setSettleModalData] = useState<{emi: Emi, vehicleId: string} | null>(null);
     const [docToDelete, setDocToDelete] = useState<{ vehicleId: string; doc: Document } | null>(null);
+    const [isSettingsOpen, setSettingsOpen] = useState(false);
 
     useEffect(() => {
         // Check if running as a PWA
@@ -1176,97 +1226,196 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
             Notification.requestPermission();
         }
 
-        const alarmInterval = setInterval(() => {
+        const checkAlarms = () => {
              if (Notification.permission !== 'granted') return;
 
             const now = new Date();
             const nowTimestamp = now.getTime();
-            const hours = now.getHours();
-            const minutes = now.getMinutes();
+            // Use local YMD to prevent UTC shift issues in alarm checking
+            const todayYMD = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+            // Normalize current date to midnight for accurate diff calculation
+            const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            
+            let vehiclesUpdated = false;
+            const updatedVehicles = [...vehicles];
 
-            const isSameDay = (d1: Date, d2: Date) => 
-                d1.getFullYear() === d2.getFullYear() && 
-                d1.getMonth() === d2.getMonth() && 
-                d1.getDate() === d2.getDate();
-
-            vehicles.forEach(vehicle => {
+            updatedVehicles.forEach(vehicle => {
                 // EMI Notifications
                 vehicle.emis.forEach(emi => {
-                    const snoozedUntil = snoozed[emi.id];
-                    if (snoozedUntil && nowTimestamp < snoozedUntil) return;
                     if (emi.paidInstallments >= emi.totalTenure) return;
 
                     let [sY, sM, sD] = emi.startDate.split('-').map(Number);
                     if (sY < 100) sY += 2000;
                     
+                    // Calculate Next Due Date
                     const nextDueDate = new Date(sY, sM - 1 + emi.paidInstallments, sD);
-                    
-                    const dayBeforeDueDate = new Date(nextDueDate);
-                    dayBeforeDueDate.setDate(nextDueDate.getDate() - 1);
-                    
-                    const dateString = dayBeforeDueDate.toISOString().split('T')[0];
+                    // Normalize Next Due Date to Midnight
+                    const nextDueDateMidnight = new Date(nextDueDate.getFullYear(), nextDueDate.getMonth(), nextDueDate.getDate());
 
-                    if (isSameDay(now, dayBeforeDueDate)) {
-                        const vehicleName = `${vehicle.make} ${vehicle.model}`;
-                        // 10:15 AM "Sweet Alarm"
-                        if (hours === 10 && minutes === 15) {
-                            const key = `notif_sent_1015_${emi.id}_${dateString}`;
-                            if (!sessionStorage.getItem(key)) {
-                                const message = `Your EMI of ₹${emi.amount.toLocaleString()} for ${vehicleName} is due tomorrow.`;
+                    const diffTime = nextDueDateMidnight.getTime() - todayMidnight.getTime();
+                    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+                    // Rule: Alarm triggers for items in "Today" category (which corresponds to Due Tomorrow, i.e., diffDays === 1)
+                    if (diffDays === 1) {
+                        // 1. Initialize Alarm Config if missing for today
+                        if (!emi.alarmConfig || emi.alarmConfig.date !== todayYMD) {
+                            // Determine start time
+                            const defaultTimeStr = emi.alarmConfig?.manualTime || settings.reminderTime;
+                            const [h, m] = defaultTimeStr.split(':').map(Number);
+                            
+                            const triggerDate = new Date(now);
+                            triggerDate.setHours(h, m, 0, 0);
+                            
+                            const newConfig = {
+                                date: todayYMD,
+                                nextTrigger: triggerDate.toISOString(),
+                                snoozeCount: 0,
+                                manualTime: emi.alarmConfig?.manualTime, // Preserve manual time if exists from previous day setting (unlikely) or undefined
+                                hasRung: false,
+                                isDismissed: false,
+                                history: []
+                            };
+                            
+                            emi.alarmConfig = newConfig;
+                            vehiclesUpdated = true;
+                        }
+
+                        // 2. Check Trigger
+                        if (emi.alarmConfig && !emi.alarmConfig.isDismissed && !emi.alarmConfig.hasRung) {
+                            const triggerTime = new Date(emi.alarmConfig.nextTrigger).getTime();
+                            
+                            // If current time is past trigger time (within reasonable window or just "past")
+                            if (nowTimestamp >= triggerTime) {
+                                const dateStr = `${String(nextDueDateMidnight.getDate()).padStart(2,'0')}/${String(nextDueDateMidnight.getMonth()+1).padStart(2,'0')}`;
+                                const message = `Your EMI of ₹${emi.amount.toLocaleString()} for ${vehicle.make} ${vehicle.model} is due tomorrow (${dateStr}).`;
                                 new Notification('EMI Reminder', { body: message, tag: emi.id });
-                                sessionStorage.setItem(key, 'true');
+                                
+                                emi.alarmConfig.hasRung = true;
+                                emi.alarmConfig.history.push({
+                                    timestamp: new Date().toISOString(),
+                                    action: 'ring' as const
+                                });
+                                vehiclesUpdated = true;
                             }
-                        }
-
-                        // 9:30 PM "Important Alarm"
-                        if (hours === 21 && minutes === 30) {
-                             const key = `notif_sent_2130_${emi.id}_${dateString}`;
-                             if (!sessionStorage.getItem(key)) {
-                                const message = `URGENT: Your EMI for ${vehicleName} is due tomorrow. Please ensure funds are available.`;
-                                new Notification('Final EMI Reminder', { body: message, tag: emi.id });
-                                sessionStorage.setItem(key, 'true');
-                            }
-                        }
-                    }
-                });
-
-                // Document Notifications
-                vehicle.documents.forEach(doc => {
-                    const snoozedUntil = snoozed[doc.id];
-                    if (snoozedUntil && nowTimestamp < snoozedUntil) return;
-
-                    const expiryDate = new Date(doc.expiryDate);
-                    const threeDaysBefore = new Date(expiryDate);
-                    threeDaysBefore.setDate(expiryDate.getDate() - 3);
-                    const oneDayBefore = new Date(expiryDate);
-                    oneDayBefore.setDate(expiryDate.getDate() - 1);
-
-                    const dateString = now.toISOString().split('T')[0];
-
-                    if (isSameDay(now, threeDaysBefore) && hours === 9 && minutes === 0) {
-                        const key = `notif_doc_3d_${doc.id}_${dateString}`;
-                         if (!sessionStorage.getItem(key)) {
-                            const message = `${vehicle.make} ${vehicle.model}'s ${doc.name} will expire in 3 days.`;
-                            new Notification('Document Expiry Reminder', { body: message, tag: doc.id });
-                            sessionStorage.setItem(key, 'true');
-                        }
-                    }
-
-                    if (isSameDay(now, oneDayBefore) && hours === 9 && minutes === 0) {
-                        const key = `notif_doc_1d_${doc.id}_${dateString}`;
-                         if (!sessionStorage.getItem(key)) {
-                            const message = `URGENT: Your ${doc.name} for ${vehicle.make} expires tomorrow!`;
-                             new Notification('Document Expiry URGENT', { body: message, tag: doc.id });
-                             sessionStorage.setItem(key, 'true');
                         }
                     }
                 });
             });
 
-        }, 60000); // Check every minute
+            if (vehiclesUpdated) {
+                setVehicles(updatedVehicles);
+            }
+        };
+
+        // Run immediately on mount then interval
+        checkAlarms();
+        const alarmInterval = setInterval(checkAlarms, 60000); // Check every minute
 
         return () => clearInterval(alarmInterval);
-    }, [vehicles, snoozed]);
+    }, [vehicles, settings.reminderTime]);
+
+    const handleSnoozeAlarm = (emiId: string, vehicleId: string) => {
+        updateVehicle(vehicleId, v => {
+            const updatedEmis = v.emis.map(emi => {
+                if (emi.id === emiId && emi.alarmConfig) {
+                    const now = new Date();
+                    const newCount = emi.alarmConfig.snoozeCount + 1;
+                    let newTrigger = new Date(); // Default basis is "Now"
+
+                    if (newCount === 1) {
+                        // First snooze: +2 hours
+                        newTrigger.setHours(now.getHours() + 2);
+                    } else if (newCount === 2) {
+                        // Second snooze: 5:00 PM
+                        newTrigger.setHours(17, 0, 0, 0);
+                        // If it's already past 5 PM, add 2 hours fallback
+                        if (newTrigger.getTime() <= now.getTime()) {
+                             newTrigger = new Date();
+                             newTrigger.setHours(now.getHours() + 2);
+                        }
+                    } else {
+                        // Subsequent snoozes: +2 hours
+                        newTrigger.setHours(now.getHours() + 2);
+                    }
+
+                    return {
+                        ...emi,
+                        alarmConfig: {
+                            ...emi.alarmConfig!,
+                            snoozeCount: newCount,
+                            nextTrigger: newTrigger.toISOString(),
+                            hasRung: false,
+                            history: [...emi.alarmConfig!.history, {
+                                timestamp: new Date().toISOString(),
+                                action: 'snooze' as const,
+                                details: `Rescheduled to ${newTrigger.toLocaleTimeString()}`
+                            }]
+                        }
+                    };
+                }
+                return emi;
+            });
+            return { ...v, emis: updatedEmis };
+        });
+    };
+
+    const handleSetManualAlarm = (emiId: string, vehicleId: string, time: string) => {
+        updateVehicle(vehicleId, v => {
+            const updatedEmis = v.emis.map(emi => {
+                if (emi.id === emiId && emi.alarmConfig) {
+                    const [h, m] = time.split(':').map(Number);
+                    const newTrigger = new Date();
+                    newTrigger.setHours(h, m, 0, 0);
+                    
+                    return {
+                        ...emi,
+                        alarmConfig: {
+                            ...emi.alarmConfig!,
+                            manualTime: time,
+                            nextTrigger: newTrigger.toISOString(),
+                            hasRung: false, // Reset rung state so it rings at new time
+                            // Note: We do NOT reset snoozeCount per prompt implication, 
+                            // but usually manual set implies a reset of the "snooze flow". 
+                            // However, prompt says "Manual time should not override the default schedule and follow the same snooze rules".
+                            // We'll keep snoozeCount to track behaviour or reset? 
+                            // "Use that manual time instead of default 11am". This implies it's like the initial start.
+                            // Let's reset snoozeCount to treat it as a fresh start for the day.
+                            snoozeCount: 0,
+                            history: [...emi.alarmConfig!.history, {
+                                timestamp: new Date().toISOString(),
+                                action: 'manual_set' as const,
+                                details: `Set to ${time}`
+                            }]
+                        }
+                    };
+                }
+                return emi;
+            });
+            return { ...v, emis: updatedEmis };
+        });
+    };
+
+    const handleDismissAlarm = (emiId: string, vehicleId: string) => {
+        updateVehicle(vehicleId, v => {
+            const updatedEmis = v.emis.map(emi => {
+                if (emi.id === emiId && emi.alarmConfig) {
+                    return {
+                        ...emi,
+                        alarmConfig: {
+                            ...emi.alarmConfig!,
+                            isDismissed: true,
+                            history: [...emi.alarmConfig!.history, {
+                                timestamp: new Date().toISOString(),
+                                action: 'dismiss' as const,
+                            }]
+                        }
+                    };
+                }
+                return emi;
+            });
+            return { ...v, emis: updatedEmis };
+        });
+    };
 
 
     const handleSaveVehicle = (vehicleData: Omit<Vehicle, 'id' | 'documents' | 'emis' | 'archivedDocuments'>) => {
@@ -1345,6 +1494,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
                         paidInstallments: emi.paidInstallments + 1,
                         lastPaymentDate: today.toISOString().split('T')[0],
                         paymentHistory: [...(emi.paymentHistory || []), newPayment],
+                        alarmConfig: undefined // Clear alarm config on payment
                     };
                 }
                 return emi;
@@ -1381,6 +1531,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
                         lastPaymentDate: paidDate,
                         extraCharges: (e.extraCharges || 0) + bounceCharges,
                         paymentHistory: [...(e.paymentHistory || []), newPayment],
+                        alarmConfig: undefined
                     };
                 }
                 return e;
@@ -1412,6 +1563,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
                         paidInstallments: e.paidInstallments + 1, 
                         lastPaymentDate: today,
                         paymentHistory: [...(e.paymentHistory || []), newPayment],
+                        alarmConfig: undefined
                     };
                 }
                 return e;
@@ -1435,7 +1587,8 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
                     return {
                         ...e,
                         paidInstallments: e.totalTenure,
-                        settlementDetails: { amount: settleAmount, date: settleDate }
+                        settlementDetails: { amount: settleAmount, date: settleDate },
+                        alarmConfig: undefined
                     };
                 }
                 return e;
@@ -1576,6 +1729,9 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
                             snoozed={snoozed}
                             onSnoozeItem={handleSnoozeItem}
                             onMarkEmiPaid={handleOpenEmiPaidModal}
+                            onSnoozeAlarm={handleSnoozeAlarm}
+                            onSetManualAlarm={handleSetManualAlarm}
+                            onDismissAlarm={handleDismissAlarm}
                         />;
         }
     };
@@ -1591,14 +1747,14 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
                             <rect x="181" y="200" width="150" height="120" rx="10" stroke="white" strokeWidth="16"/>
                             <path d="M181 240H331" stroke="white" strokeWidth="16" strokeLinecap="round"/>
                             <path d="M221 180V220" stroke="white" strokeWidth="16" strokeLinecap="round"/>
-                            <path d="M291 180V220" stroke="white" strokeWidth="16" strokeLinecap="round"/>
+                            <path d="M291 180V220" stroke="white" stroke-width="16" strokeLinecap="round"/>
                         </svg>
                         <h1 className="text-xl font-bold text-white">Due Guardian</h1>
                     </div>
                     <div className="flex items-center gap-2">
                         <span className="text-sm text-slate-400 hidden sm:inline">{currentUser}</span>
-                        <button onClick={onLogout} className="p-2 text-slate-400 hover:text-white rounded-full hover:bg-slate-700 transition-colors" title="Logout">
-                            <LogoutIcon className="w-6 h-6" />
+                        <button onClick={() => setSettingsOpen(true)} className="p-2 text-slate-400 hover:text-white rounded-full hover:bg-slate-700 transition-colors" title="Settings">
+                            <SettingsIcon className="w-6 h-6" />
                         </button>
                     </div>
                  </div>
@@ -1641,6 +1797,14 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
                     vehicleName={`${vehicleToDelete.make} ${vehicleToDelete.model}`}
                 />
             )}
+
+            <SettingsModal 
+                isOpen={isSettingsOpen}
+                onClose={() => setSettingsOpen(false)}
+                reminderTime={settings.reminderTime}
+                onTimeChange={(time) => setSettings({ ...settings, reminderTime: time })}
+                onLogout={onLogout}
+            />
             
             {!isRunningStandalone && installPrompt && (
                 <div className="fixed bottom-20 right-4 z-50">
