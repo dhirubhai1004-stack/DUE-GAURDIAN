@@ -1,10 +1,12 @@
 
+
+
 import React, { useState, useEffect } from 'react';
 import useLocalStorage from './hooks/useLocalStorage';
 import { Vehicle, VehicleType, Emi, Document, PREDEFINED_DOC_NAMES, EmiPayment } from './types';
 import Dashboard from './components/Dashboard';
 import Modal from './components/Modal';
-import { PlusIcon, ArrowLeftIcon, CarIcon, TruckIcon, MachineIcon, BikeIcon, DashboardIcon, VehicleIcon, DownloadIcon, EditIcon, DeleteIcon, CheckCircleIcon, OtherVehicleIcon, PersonalLoanIcon, BusinessLoanIcon, HomeLoanIcon } from './components/icons';
+import { PlusIcon, ArrowLeftIcon, CarIcon, TruckIcon, MachineIcon, BikeIcon, DashboardIcon, VehicleIcon, DownloadIcon, EditIcon, DeleteIcon, CheckCircleIcon, OtherVehicleIcon, PersonalLoanIcon, BusinessLoanIcon, HomeLoanIcon, LogoutIcon } from './components/icons';
 import AddToHomeScreenPrompt from './components/AddToHomeScreenPrompt';
 
 const vehicleTypeIcons: Record<string, React.ReactNode> = {
@@ -1019,10 +1021,109 @@ const ConfirmationModal: React.FC<{
     );
 };
 
+const Login: React.FC<{ onLogin: (user: string) => void }> = ({ onLogin }) => {
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
 
-const App: React.FC = () => {
-    const [vehicles, setVehicles] = useLocalStorage<Vehicle[]>('vehicles', []);
-    const [snoozed, setSnoozed] = useLocalStorage<Record<string, number>>('snoozedReminders', {});
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!username || !password) {
+      setError('Please fill in all fields');
+      return;
+    }
+
+    // In a real app, this would be a server call.
+    // For this local version, we store user credentials in a separate localStorage key.
+    const users = JSON.parse(localStorage.getItem('app_users') || '{}');
+
+    if (isRegistering) {
+      if (users[username]) {
+        setError('Username already exists');
+        return;
+      }
+
+      // Password Validation
+      if (password.length < 8) {
+        setError('Password must be at least 8 characters long.');
+        return;
+      }
+      if (!/[a-zA-Z]/.test(password)) {
+        setError('Password must contain at least one alphabet.');
+        return;
+      }
+      if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+        setError('Password must contain at least one symbol (e.g., !@#$).');
+        return;
+      }
+
+      users[username] = password; // In real app, hash this!
+      localStorage.setItem('app_users', JSON.stringify(users));
+      onLogin(username);
+    } else {
+      if (users[username] && users[username] === password) {
+        onLogin(username);
+      } else {
+        setError('Invalid username or password');
+      }
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4">
+       <div className="bg-slate-800 p-8 rounded-lg shadow-xl w-full max-w-md">
+          <div className="flex flex-col items-center mb-6">
+              <svg className="w-16 h-16 text-indigo-400 mb-4" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="512" height="512" rx="96" fill="#1E293B" fillOpacity="0"/>
+                <path d="M256 74.6667L96 154.667V256C96 364.533 165.76 430.4 256 448C346.24 430.4 416 364.533 416 256V154.667L256 74.6667Z" stroke="currentColor" strokeWidth="24" strokeLinecap="round" strokeLinejoin="round"/>
+                <rect x="181" y="200" width="150" height="120" rx="10" stroke="white" strokeWidth="16"/>
+                <path d="M181 240H331" stroke="white" strokeWidth="16" strokeLinecap="round"/>
+                <path d="M221 180V220" stroke="white" strokeWidth="16" strokeLinecap="round"/>
+                <path d="M291 180V220" stroke="white" strokeWidth="16" strokeLinecap="round"/>
+            </svg>
+            <h1 className="text-3xl font-bold text-white">Due Guardian</h1>
+          </div>
+          <h2 className="text-xl font-bold text-indigo-400 mb-6 text-center">
+            {isRegistering ? 'Create Account' : 'Login'}
+          </h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
+             {error && <div className="bg-red-900/50 text-red-200 p-3 rounded text-sm text-center border border-red-500/50">{error}</div>}
+             <div>
+               <label className="block text-sm text-slate-400 mb-1">Username</label>
+               <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white focus:border-indigo-500 outline-none" />
+             </div>
+             <div>
+               <label className="block text-sm text-slate-400 mb-1">Password</label>
+               <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white focus:border-indigo-500 outline-none" />
+               {isRegistering && <p className="text-xs text-slate-500 mt-1">Min 8 chars, 1 alphabet, 1 symbol required.</p>}
+             </div>
+             <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 p-2 rounded text-white font-bold mt-4 transition-colors">
+               {isRegistering ? 'Sign Up' : 'Login'}
+             </button>
+          </form>
+          <p className="text-center text-slate-400 text-sm mt-6">
+            {isRegistering ? 'Already have an account?' : "Don't have an account?"}
+            <button onClick={() => { setIsRegistering(!isRegistering); setError(''); }} className="text-indigo-400 hover:underline ml-1 font-semibold">
+              {isRegistering ? 'Login' : 'Sign Up'}
+            </button>
+          </p>
+       </div>
+    </div>
+  );
+}
+
+interface AuthenticatedAppProps {
+    currentUser: string;
+    onLogout: () => void;
+}
+
+const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogout }) => {
+    // Key localStorage by currentUser to separate data
+    const [vehicles, setVehicles] = useLocalStorage<Vehicle[]>(`${currentUser}_vehicles`, []);
+    const [snoozed, setSnoozed] = useLocalStorage<Record<string, number>>(`${currentUser}_snoozedReminders`, {});
+    
     const [view, setView] = useState<View>('dashboard');
     const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
     const [isVehicleFormModalOpen, setVehicleFormModalOpen] = useState(false);
@@ -1039,7 +1140,6 @@ const App: React.FC = () => {
     const [paymentModalData, setPaymentModalData] = useState<{emi: Emi, vehicleId: string, type: 'overdue' | 'today'} | null>(null);
     const [settleModalData, setSettleModalData] = useState<{emi: Emi, vehicleId: string} | null>(null);
     const [docToDelete, setDocToDelete] = useState<{ vehicleId: string; doc: Document } | null>(null);
-
 
     useEffect(() => {
         // Check if running as a PWA
@@ -1481,7 +1581,7 @@ const App: React.FC = () => {
     };
     
     return (
-        <div className="min-h-screen flex flex-col pb-16">
+        <div className="min-h-screen flex flex-col pb-16 bg-slate-900">
             <header className="bg-slate-800 shadow-md sticky top-0 z-10">
                  <div className="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
                     <div className="flex items-center space-x-2">
@@ -1494,6 +1594,12 @@ const App: React.FC = () => {
                             <path d="M291 180V220" stroke="white" strokeWidth="16" strokeLinecap="round"/>
                         </svg>
                         <h1 className="text-xl font-bold text-white">Due Guardian</h1>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm text-slate-400 hidden sm:inline">{currentUser}</span>
+                        <button onClick={onLogout} className="p-2 text-slate-400 hover:text-white rounded-full hover:bg-slate-700 transition-colors" title="Logout">
+                            <LogoutIcon className="w-6 h-6" />
+                        </button>
                     </div>
                  </div>
             </header>
@@ -1581,6 +1687,41 @@ const App: React.FC = () => {
                 Are you sure you want to permanently delete "{docToDelete?.doc.name}"? This action cannot be undone.
             </ConfirmationModal>
         </div>
+    );
+};
+
+const App: React.FC = () => {
+    const [currentUser, setCurrentUser] = useState<string | null>(null);
+
+    useEffect(() => {
+        const savedUser = localStorage.getItem('active_session_user');
+        if (savedUser) {
+            setCurrentUser(savedUser);
+        }
+    }, []);
+
+    const handleLogin = (user: string) => {
+        setCurrentUser(user);
+        localStorage.setItem('active_session_user', user);
+    };
+
+    const handleLogout = () => {
+        setCurrentUser(null);
+        localStorage.removeItem('active_session_user');
+    };
+
+    if (!currentUser) {
+        return <Login onLogin={handleLogin} />;
+    }
+
+    // We use `key={currentUser}` to force a full remount of AuthenticatedApp when the user changes.
+    // This ensures that the `useLocalStorage` hooks inside it re-initialize with the new user's key prefix.
+    return (
+        <AuthenticatedApp 
+            key={currentUser} 
+            currentUser={currentUser} 
+            onLogout={handleLogout} 
+        />
     );
 };
 
