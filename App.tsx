@@ -174,6 +174,7 @@ const EmiFormModal: React.FC<{
     const [paidTillDate, setPaidTillDate] = useState('');
     const [totalCost, setTotalCost] = useState('');
     const [downPayment, setDownPayment] = useState('');
+    const [error, setError] = useState<string | null>(null);
     
     const isEditing = !!initialData;
     const isLoan = [VehicleType.PersonalLoan, VehicleType.BusinessLoan, VehicleType.Overdraft, VehicleType.HomeLoan].includes(vehicleType as VehicleType);
@@ -198,6 +199,7 @@ const EmiFormModal: React.FC<{
             setInterest(''); setProvider(''); setLoanId(''); setBank('');
             setCalculatedEndDate(null); setPaidTillDate('');
             setTotalCost(''); setDownPayment('');
+            setError(null);
         }
     }, [isOpen, initialData]);
 
@@ -220,12 +222,23 @@ const EmiFormModal: React.FC<{
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        setError(null);
         
         let paidCount = initialData?.paidInstallments || 0;
         const tenureNum = parseInt(totalTenure, 10);
+
+        if (tenureNum <= 0) {
+            setError("Tenure must be greater than 0.");
+            return;
+        }
         
         // Recalculate paid installments only if paidTillDate is provided by the user
         if (startDate && paidTillDate && tenureNum > 0) {
+            if (new Date(paidTillDate) < new Date(startDate)) {
+                setError("Paid Till Date cannot be earlier than Start Date.");
+                return;
+            }
+
             const start = new Date(startDate);
             const paidTill = new Date(paidTillDate);
             let calculatedCount = 0;
@@ -263,6 +276,7 @@ const EmiFormModal: React.FC<{
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Edit EMI Details' : 'Add EMI Details'}>
             <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto p-1">
+                {error && <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-2 rounded text-sm mb-4">{error}</div>}
                 <div>
                     <label className="text-sm text-slate-400 mb-1 block">EMI Amount</label>
                     <input type="number" placeholder="Enter EMI Amount" value={amount} onChange={e => setAmount(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
@@ -297,7 +311,7 @@ const EmiFormModal: React.FC<{
                 <div>
                     <label className="text-sm text-slate-400 mb-1 block">Paid Till Date</label>
                     <p className="text-xs text-slate-500 mb-1">Select the last date you paid an EMI to auto-calculate progress.</p>
-                    <input type="date" value={paidTillDate} onChange={e => setPaidTillDate(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" />
+                    <input type="date" value={paidTillDate} onChange={e => setPaidTillDate(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" min={startDate} />
                 </div>
 
                 <div>
@@ -369,6 +383,7 @@ const AddDocModal: React.FC<{
     const [fileData, setFileData] = useState<string | undefined>();
     const [fileName, setFileName] = useState<string | undefined>();
     const [docNameError, setDocNameError] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     const isLoan = [VehicleType.PersonalLoan, VehicleType.BusinessLoan, VehicleType.Overdraft, VehicleType.HomeLoan].includes(vehicleType as VehicleType);
 
@@ -421,6 +436,7 @@ const AddDocModal: React.FC<{
         setFileData(undefined);
         setFileName(undefined);
         setDocNameError(null);
+        setError(null);
     };
 
     useEffect(() => {
@@ -467,8 +483,14 @@ const AddDocModal: React.FC<{
     
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        setError(null);
         const finalDocName = docName === 'Other' ? customDocName : docName;
         if (!finalDocName || !expiryDate || !validFrom) return;
+
+        if (new Date(expiryDate) < new Date(validFrom)) {
+            setError("Expiry Date cannot be earlier than Valid From Date.");
+            return;
+        }
 
         if (!checkExistingDoc(finalDocName, initialData?.id)) {
             return;
@@ -483,6 +505,7 @@ const AddDocModal: React.FC<{
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={title}>
             <form onSubmit={handleSubmit} className="space-y-4">
+                {error && <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-2 rounded text-sm mb-4">{error}</div>}
                  <select value={docName} onChange={handleDocNameChange} className="w-full p-2 bg-slate-700 border border-slate-600 rounded">
                     {availableDocNames.map(name => <option key={name} value={name}>{name}</option>)}
                 </select>
@@ -494,7 +517,7 @@ const AddDocModal: React.FC<{
                 </div>
                  <div>
                     <label className="text-sm text-slate-400">Valid Till (Expiry Date)</label>
-                    <input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
+                    <input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required min={validFrom} />
                 </div>
 
                 <div>
