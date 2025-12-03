@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Vehicle, ReminderItem, ReminderCategory, Emi, Document as DocType } from '../types';
+import { Vehicle, ReminderItem, ReminderCategory, Emi, Document as DocType, MACHINE_TYPES } from '../types';
 import { CarIcon, TruckIcon, BikeIcon, MachineIcon, DocumentIcon, EmiIcon, SnoozeIcon, OtherVehicleIcon, CheckCircleIcon, PersonalLoanIcon, BusinessLoanIcon, HomeLoanIcon, ClockIcon, BellIcon, BellSlashIcon } from './icons';
 
 interface DashboardProps {
@@ -24,6 +24,9 @@ const formatDate = (dateString?: string): string => {
 };
 
 const getVehicleIcon = (type: string) => {
+    // Check if it's one of the specific machine types
+    if (MACHINE_TYPES.includes(type as any)) return <MachineIcon className="w-5 h-5 mr-2" />;
+
     switch (type) {
         case 'Car': return <CarIcon className="w-5 h-5 mr-2" />;
         case 'Truck': return <TruckIcon className="w-5 h-5 mr-2" />;
@@ -95,7 +98,8 @@ const ReminderCard: React.FC<{
                         <p className="text-sm text-slate-400">{item.vehicle.registrationNumber}</p>
                     </div>
                     <div className="flex items-center space-x-2">
-                        {!isTodayEmi && (
+                        {/* Only allow snoozing/hiding if it's not in the main actionable "Today" list, unless user wants to hide it */}
+                        {category !== 'overdue' && (
                             <button 
                                 onClick={(e) => { e.stopPropagation(); onSnoozeItem(item.item.id); }} 
                                 className="p-1.5 text-slate-400 hover:text-white rounded-full hover:bg-slate-700/50 transition-colors"
@@ -114,7 +118,7 @@ const ReminderCard: React.FC<{
                 </div>
             </div>
             
-            {/* Alarm UI for Today's EMIs (which are effectively Due Tomorrow) */}
+            {/* Alarm UI for Today's EMIs */}
             {isTodayEmi && (
                 <div className="mt-2 pt-2 border-t border-slate-700/50 bg-slate-800/40 p-2 rounded">
                     <div className="flex items-center justify-between mb-2">
@@ -251,19 +255,19 @@ const Dashboard: React.FC<DashboardProps> = ({ vehicles, onViewVehicle, snoozed,
                 const diffTime = nextDueDateMidnight.getTime() - todayMidnight.getTime();
                 const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
-                // Application Rules:
-                // 1. Due Date = Today (Diff 0) or earlier -> Overdue
-                // 2. Due Date = Tomorrow (Diff 1) -> Today
-                // 3. Due Date = Day After Tomorrow (Diff 2) -> Tomorrow
-                // 4. Due Date = Next 5 days (Diff 3-7) -> Upcoming
+                // Application Rules (Modified per user request):
+                // 1. Overdue: Strictly Past (Diff < 0)
+                // 2. Today: Today (0) AND Tomorrow (1) -> "Kal ki emi aaj due me dikhao"
+                // 3. Tomorrow: Day After Tomorrow (2) -> "Parso ki Tomorrow me"
+                // 4. Upcoming: Next 5 days after that (3 to 7) -> "Uske baad 5 din upcoming me"
 
-                if (diffDays <= 0) {
+                if (diffDays < 0) {
                     if (snoozed[emi.id] && nowTimestamp < snoozed[emi.id]) return;
                     categorized.overdue.push(reminderItem);
-                } else if (diffDays === 1) {
+                } else if (diffDays === 0 || diffDays === 1) {
                     categorized.today.push(reminderItem);
                 } else if (diffDays === 2) {
-                    if (snoozed[emi.id] && nowTimestamp < snoozed[emi.id]) return;
+                     if (snoozed[emi.id] && nowTimestamp < snoozed[emi.id]) return;
                     categorized.tomorrow.push(reminderItem);
                 } else if (diffDays >= 3 && diffDays <= 7) {
                     if (snoozed[emi.id] && nowTimestamp < snoozed[emi.id]) return;
@@ -287,9 +291,9 @@ const Dashboard: React.FC<DashboardProps> = ({ vehicles, onViewVehicle, snoozed,
 
                 const reminderItem: ReminderItem = { vehicle, item: doc, type: 'Document', date: doc.expiryDate };
                 
-                if (diffDays <= 0) {
+                if (diffDays < 0) {
                     categorized.overdue.push(reminderItem);
-                } else if (diffDays === 1) {
+                } else if (diffDays === 0 || diffDays === 1) {
                     categorized.today.push(reminderItem);
                 } else if (diffDays === 2) {
                     categorized.tomorrow.push(reminderItem);
@@ -331,12 +335,12 @@ const Dashboard: React.FC<DashboardProps> = ({ vehicles, onViewVehicle, snoozed,
         ) : (
             <>
                 <ReminderSection title="Overdue" items={reminders.overdue} category="overdue" />
-                <ReminderSection title="Due Today" items={reminders.today} category="today" />
+                <ReminderSection title="Due Today (Action Now)" items={reminders.today} category="today" />
                 <ReminderSection title="Due Tomorrow" items={reminders.tomorrow} category="tomorrow" />
                 
                 {!reminders.overdue.length && !reminders.today.length && !reminders.tomorrow.length && (
                      <div className="text-center py-10 my-6 bg-slate-800 rounded-lg border border-slate-700">
-                        <p className="text-slate-300 text-lg">All clear for the next 3 days! 😊</p>
+                        <p className="text-slate-300 text-lg">All clear for the next few days! 😊</p>
                     </div>
                 )}
                 

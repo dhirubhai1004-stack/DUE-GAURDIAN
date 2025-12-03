@@ -11,6 +11,24 @@ export enum VehicleType {
   Other = 'Other',
 }
 
+export const MACHINE_TYPES = [
+  'Roller',
+  'Excavator',
+  'JCB / Backhoe',
+  'Crane',
+  'Bulldozer',
+  'Dumper / Tipper',
+  'Grader',
+  'Wheel Loader',
+  'Concrete Mixer',
+  'Bobcat / Skid Steer',
+  'Paver',
+  'Forklift',
+  'Tractor',
+  'Borewell Machine',
+  'Other Machine'
+] as const;
+
 export const PREDEFINED_DOC_NAMES = [
   'Registration Certificate (RC)', 
   'Insurance', 

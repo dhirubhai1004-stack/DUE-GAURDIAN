@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import useLocalStorage from './hooks/useLocalStorage';
-import { Vehicle, VehicleType, Emi, Document, PREDEFINED_DOC_NAMES, EmiPayment, AlarmLog } from './types';
+import { Vehicle, VehicleType, Emi, Document, PREDEFINED_DOC_NAMES, EmiPayment, AlarmLog, MACHINE_TYPES } from './types';
 import Dashboard from './components/Dashboard';
 import Modal from './components/Modal';
 import { PlusIcon, ArrowLeftIcon, CarIcon, TruckIcon, MachineIcon, BikeIcon, DashboardIcon, VehicleIcon, DownloadIcon, EditIcon, DeleteIcon, CheckCircleIcon, OtherVehicleIcon, PersonalLoanIcon, BusinessLoanIcon, HomeLoanIcon, LogoutIcon, SettingsIcon } from './components/icons';
@@ -19,6 +19,7 @@ const vehicleTypeIcons: Record<string, React.ReactNode> = {
 };
 
 const getVehicleIcon = (type: string) => {
+    if (MACHINE_TYPES.includes(type as any)) return <MachineIcon className="w-8 h-8 text-yellow-400" />;
     return vehicleTypeIcons[type] || <OtherVehicleIcon className="w-8 h-8 text-gray-400" />;
 }
 
@@ -58,13 +59,19 @@ const VehicleFormModal: React.FC<{
                 setModel(initialData.model);
                 setRegNum(initialData.registrationNumber);
                 
-                const isKnownType = [...assetTypes, ...loanTypes].includes(initialData.type as any);
-                if (isKnownType && initialData.type !== VehicleType.Other) {
+                // Check if it's one of the specific machine types
+                if (MACHINE_TYPES.includes(initialData.type as any)) {
                     setType(initialData.type);
                     setCustomType('');
                 } else {
-                    setType(VehicleType.Other);
-                    setCustomType(initialData.type);
+                    const isKnownType = [...assetTypes, ...loanTypes].includes(initialData.type as any);
+                    if (isKnownType && initialData.type !== VehicleType.Other) {
+                        setType(initialData.type);
+                        setCustomType('');
+                    } else {
+                        setType(VehicleType.Other);
+                        setCustomType(initialData.type);
+                    }
                 }
             } else {
                 setMake('');
@@ -87,9 +94,19 @@ const VehicleFormModal: React.FC<{
         ? (isLoanMode ? "Edit Loan Details" : "Edit Asset Details")
         : (isLoanMode ? "Add New Loan" : "Add New Asset");
 
+    // Helper to determine what to show in the main category dropdown
+    const getCategoryFromType = (t: string) => {
+        if (MACHINE_TYPES.includes(t as any)) return VehicleType.Machine;
+        if (t === VehicleType.Other || ![...assetTypes, ...loanTypes].includes(t as any)) return VehicleType.Other;
+        return t;
+    };
+
+    const currentCategory = getCategoryFromType(type);
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const finalType = type === VehicleType.Other ? customType : type;
+        // If category is Other, use customType. If category is Machine, 'type' already holds the subtype (e.g. Excavator) or default 'Machine'
+        const finalType = currentCategory === VehicleType.Other ? customType : type;
         if (!make || !model || !regNum || !finalType) return;
         onSave({ make, model, registrationNumber: regNum.toUpperCase(), type: finalType });
         onClose();
@@ -99,11 +116,39 @@ const VehicleFormModal: React.FC<{
         <Modal isOpen={isOpen} onClose={onClose} title={titleText}>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <label className="block text-sm font-medium text-slate-400 mb-1">Type</label>
-                <select value={type} onChange={e => setType(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded mb-4">
+                <select 
+                    value={currentCategory} 
+                    onChange={e => {
+                        const newCategory = e.target.value;
+                        if (newCategory === VehicleType.Machine) {
+                            // Default to first machine type or just Machine if desired, but user wants options.
+                            // Let's default to the generic 'Machine' category icon behavior first, then they pick subtype.
+                            // But our state 'type' needs to be one of the MACHINE_TYPES if they pick one.
+                            // Let's reset to first machine type for convenience
+                            setType(MACHINE_TYPES[0]);
+                        } else {
+                            setType(newCategory);
+                        }
+                    }} 
+                    className="w-full p-2 bg-slate-700 border border-slate-600 rounded mb-4"
+                >
                     {availableTypes.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
                 
-                {type === VehicleType.Other && (
+                {currentCategory === VehicleType.Machine && (
+                    <div className="mb-4 animate-fadeIn">
+                        <label className="block text-sm font-medium text-slate-400 mb-1">Machine Type</label>
+                        <select 
+                            value={type} 
+                            onChange={e => setType(e.target.value)} 
+                            className="w-full p-2 bg-slate-700 border border-slate-600 rounded"
+                        >
+                            {MACHINE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                    </div>
+                )}
+                
+                {currentCategory === VehicleType.Other && (
                      <input type="text" placeholder="Custom Type Name" value={customType} onChange={e => setCustomType(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
                 )}
                 
@@ -997,13 +1042,16 @@ const SettingsModal: React.FC<{
     reminderTime: string;
     onTimeChange: (time: string) => void;
     onLogout: () => void;
-}> = ({ isOpen, onClose, reminderTime, onTimeChange, onLogout }) => {
+    onExport: () => void;
+    onImport: (file: File) => void;
+}> = ({ isOpen, onClose, reminderTime, onTimeChange, onLogout, onExport, onImport }) => {
     // Parse current time for default values
     const [h, m] = (reminderTime || '11:00').split(':').map(Number);
     const currentPeriod = h >= 12 ? 'PM' : 'AM';
     const currentHour12 = h % 12 || 12;
     const currentHourStr = String(currentHour12).padStart(2, '0');
     const currentMinuteStr = String(m).padStart(2, '0');
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleTimeUpdate = (newH: string, newM: string, newP: string) => {
         let hour = parseInt(newH, 10);
@@ -1011,6 +1059,12 @@ const SettingsModal: React.FC<{
         if (newP === 'AM' && hour === 12) hour = 0;
         const timeStr = `${String(hour).padStart(2, '0')}:${newM}`;
         onTimeChange(timeStr);
+    };
+
+    const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            onImport(e.target.files[0]);
+        }
     };
 
     const hours = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
@@ -1053,6 +1107,24 @@ const SettingsModal: React.FC<{
                         This is the default time for new daily reminders. You can set specific times for items due today on the dashboard.
                     </p>
                 </div>
+
+                <div className="pt-4 border-t border-slate-700">
+                    <h3 className="text-lg font-semibold text-white mb-2">Data Backup & Restore</h3>
+                    <p className="text-xs text-slate-400 mb-3">
+                        Since this app saves data offline on your device, use this to transfer data between phones.
+                    </p>
+                    <div className="flex gap-2">
+                         <button onClick={onExport} className="flex-1 bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-2 rounded flex items-center justify-center gap-2 text-sm">
+                            <DownloadIcon className="w-4 h-4" />
+                            <span>Backup Data</span>
+                        </button>
+                        <button onClick={() => fileInputRef.current?.click()} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-2 rounded flex items-center justify-center gap-2 text-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M11 15h2V9h3l-4-5-4 5h3zM20 18H4v-7H2v7c0 1.103.897 2 2 2h16c1.103 0 2-.897 2-2v-7h-2v7z"></path></svg>
+                            <span>Restore Data</span>
+                        </button>
+                        <input type="file" ref={fileInputRef} onChange={handleFileImport} className="hidden" accept=".json" />
+                    </div>
+                </div>
                 
                 <div className="pt-4 border-t border-slate-700">
                      <h3 className="text-lg font-semibold text-white mb-2">Account</h3>
@@ -1061,7 +1133,7 @@ const SettingsModal: React.FC<{
                         <span>Logout / Switch Profile</span>
                      </button>
                      <p className="text-xs text-slate-500 mt-2 text-center">
-                        Logs out the current session. You can add a new profile or login to another account from the login screen.
+                        Logs out the current session. Data is stored locally on this device.
                      </p>
                 </div>
             </div>
@@ -1094,16 +1166,8 @@ const Login: React.FC<{ onLogin: (user: string) => void }> = ({ onLogin }) => {
       }
 
       // Password Validation
-      if (password.length < 8) {
-        setError('Password must be at least 8 characters long.');
-        return;
-      }
-      if (!/[a-zA-Z]/.test(password)) {
-        setError('Password must contain at least one alphabet.');
-        return;
-      }
-      if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
-        setError('Password must contain at least one symbol (e.g., !@#$).');
+      if (password.length < 4) {
+        setError('Password must be at least 4 characters long.');
         return;
       }
 
@@ -1133,28 +1197,30 @@ const Login: React.FC<{ onLogin: (user: string) => void }> = ({ onLogin }) => {
             </svg>
             <h1 className="text-3xl font-bold text-white">Due Guardian</h1>
           </div>
-          <h2 className="text-xl font-bold text-indigo-400 mb-6 text-center">
-            {isRegistering ? 'Create Account' : 'Login'}
+          <h2 className="text-xl font-bold text-indigo-400 mb-2 text-center">
+            {isRegistering ? 'Create Local Profile' : 'Login to Profile'}
           </h2>
+          <p className="text-xs text-slate-400 text-center mb-6">
+             Note: Data is stored <strong>offline on this device</strong>. To move data to another phone, use the Backup feature in Settings.
+          </p>
           <form onSubmit={handleSubmit} className="space-y-4">
              {error && <div className="bg-red-900/50 text-red-200 p-3 rounded text-sm text-center border border-red-500/50">{error}</div>}
              <div>
-               <label className="block text-sm text-slate-400 mb-1">Username</label>
+               <label className="block text-sm text-slate-400 mb-1">Username (Profile Name)</label>
                <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white focus:border-indigo-500 outline-none" />
              </div>
              <div>
                <label className="block text-sm text-slate-400 mb-1">Password</label>
                <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white focus:border-indigo-500 outline-none" />
-               {isRegistering && <p className="text-xs text-slate-500 mt-1">Min 8 chars, 1 alphabet, 1 symbol required.</p>}
              </div>
              <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 p-2 rounded text-white font-bold mt-4 transition-colors">
-               {isRegistering ? 'Sign Up' : 'Login'}
+               {isRegistering ? 'Create Profile' : 'Login'}
              </button>
           </form>
           <p className="text-center text-slate-400 text-sm mt-6">
-            {isRegistering ? 'Already have an account?' : "Don't have an account?"}
+            {isRegistering ? 'Already have a profile?' : "New to this device?"}
             <button onClick={() => { setIsRegistering(!isRegistering); setError(''); }} className="text-indigo-400 hover:underline ml-1 font-semibold">
-              {isRegistering ? 'Login' : 'Sign Up'}
+              {isRegistering ? 'Login' : 'Create Profile'}
             </button>
           </p>
        </div>
@@ -1690,6 +1756,46 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
         setView('vehicleList');
     };
     
+    const handleExportData = () => {
+        const data = {
+            vehicles,
+            snoozed,
+            settings
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `due_guardian_backup_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const handleImportData = (file: File) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = JSON.parse(e.target?.result as string);
+                if (data.vehicles && Array.isArray(data.vehicles)) {
+                    if (confirm('This will overwrite your current data. Are you sure?')) {
+                        setVehicles(data.vehicles);
+                        if (data.snoozed) setSnoozed(data.snoozed);
+                        if (data.settings) setSettings(data.settings);
+                        setSettingsOpen(false);
+                        alert('Data restored successfully!');
+                    }
+                } else {
+                    alert('Invalid backup file.');
+                }
+            } catch (err) {
+                alert('Error parsing backup file.');
+                console.error(err);
+            }
+        };
+        reader.readAsText(file);
+    };
+
     const selectedVehicle = vehicles.find(v => v.id === selectedVehicleId);
 
     const renderContent = () => {
@@ -1804,6 +1910,8 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
                 reminderTime={settings.reminderTime}
                 onTimeChange={(time) => setSettings({ ...settings, reminderTime: time })}
                 onLogout={onLogout}
+                onExport={handleExportData}
+                onImport={handleImportData}
             />
             
             {!isRunningStandalone && installPrompt && (
@@ -1855,6 +1963,27 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
 };
 
 const App: React.FC = () => {
+    // --- TEMPORARY: BYPASS LOGIN ---
+    /* 
+       We are temporarily bypassing the login screen for testing.
+       To enable login again, comment out the bypass block below and uncomment the saved login logic block.
+    */
+    /*
+    // Bypass Block
+    const currentUser = 'User';
+    const handleLogout = () => {
+        alert("Login is currently disabled for this demo.");
+    };
+    return (
+        <AuthenticatedApp 
+            key={currentUser} 
+            currentUser={currentUser} 
+            onLogout={handleLogout} 
+        />
+    );
+    */
+
+    // --- SAVED LOGIN LOGIC (Restored) ---
     const [currentUser, setCurrentUser] = useState<string | null>(null);
 
     useEffect(() => {
@@ -1877,6 +2006,7 @@ const App: React.FC = () => {
     if (!currentUser) {
         return <Login onLogin={handleLogin} />;
     }
+    // ------------------------------------------------
 
     // We use `key={currentUser}` to force a full remount of AuthenticatedApp when the user changes.
     // This ensures that the `useLocalStorage` hooks inside it re-initialize with the new user's key prefix.
