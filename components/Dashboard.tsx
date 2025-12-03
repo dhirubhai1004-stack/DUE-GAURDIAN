@@ -25,18 +25,18 @@ const formatDate = (dateString?: string): string => {
 
 const getVehicleIcon = (type: string) => {
     // Check if it's one of the specific machine types
-    if (MACHINE_TYPES.includes(type as any)) return <MachineIcon className="w-5 h-5 mr-2" />;
+    if (MACHINE_TYPES.includes(type as any)) return <MachineIcon className="w-5 h-5 mr-2 text-yellow-400" />;
 
     switch (type) {
-        case 'Car': return <CarIcon className="w-5 h-5 mr-2" />;
-        case 'Truck': return <TruckIcon className="w-5 h-5 mr-2" />;
-        case 'Bike': return <BikeIcon className="w-5 h-5 mr-2" />;
-        case 'Machine': return <MachineIcon className="w-5 h-5 mr-2" />;
-        case 'Personal Loan': return <PersonalLoanIcon className="w-5 h-5 mr-2" />;
-        case 'Business Loan': return <BusinessLoanIcon className="w-5 h-5 mr-2" />;
-        case 'Home Loan': return <HomeLoanIcon className="w-5 h-5 mr-2" />;
+        case 'Car': return <CarIcon className="w-5 h-5 mr-2 text-blue-400" />;
+        case 'Truck': return <TruckIcon className="w-5 h-5 mr-2 text-orange-400" />;
+        case 'Bike': return <BikeIcon className="w-5 h-5 mr-2 text-green-400" />;
+        case 'Machine': return <MachineIcon className="w-5 h-5 mr-2 text-yellow-400" />;
+        case 'Personal Loan': return <PersonalLoanIcon className="w-5 h-5 mr-2 text-emerald-400" />;
+        case 'Business Loan': return <BusinessLoanIcon className="w-5 h-5 mr-2 text-purple-400" />;
+        case 'Home Loan': return <HomeLoanIcon className="w-5 h-5 mr-2 text-rose-400" />;
         case 'Overdraft / CC': return <BusinessLoanIcon className="w-5 h-5 mr-2 text-amber-400" />;
-        default: return <OtherVehicleIcon className="w-5 h-5 mr-2" />;
+        default: return <OtherVehicleIcon className="w-5 h-5 mr-2 text-slate-400" />;
     }
 };
 
