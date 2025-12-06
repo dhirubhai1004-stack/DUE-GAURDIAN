@@ -37,6 +37,20 @@ const getVehicleDisplayName = (vehicle: Vehicle) => {
 const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
     const [reportType, setReportType] = useState<ReportType>('upcoming');
     const [duration, setDuration] = useState<Duration>(30);
+    const [selectedBank, setSelectedBank] = useState<string>('All');
+
+    // Extract unique banks from all EMIs
+    const availableBanks = useMemo(() => {
+        const banks = new Set<string>();
+        vehicles.forEach(v => {
+            v.emis.forEach(e => {
+                if (e.emiBank && e.emiBank.trim() !== '') {
+                    banks.add(e.emiBank.trim());
+                }
+            });
+        });
+        return Array.from(banks).sort();
+    }, [vehicles]);
 
     const reportData = useMemo(() => {
         const rows: {
@@ -61,6 +75,12 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
 
         vehicles.forEach(vehicle => {
             vehicle.emis.forEach(emi => {
+                // Bank Filter Logic
+                const bankName = emi.emiBank ? emi.emiBank.trim() : '-';
+                if (selectedBank !== 'All' && bankName !== selectedBank) {
+                    return;
+                }
+
                 if (reportType === 'upcoming') {
                     // Calculate Upcoming Dates
                     if (emi.paidInstallments < emi.totalTenure) {
@@ -80,7 +100,7 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
                                     amount: emi.amount,
                                     vehicleName: getVehicleDisplayName(vehicle),
                                     regNumber: vehicle.registrationNumber,
-                                    bank: emi.emiBank || '-'
+                                    bank: bankName
                                 });
                             }
                         }
@@ -100,7 +120,7 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
                                     amount: payment.amount,
                                     vehicleName: getVehicleDisplayName(vehicle),
                                     regNumber: vehicle.registrationNumber,
-                                    bank: emi.emiBank || '-'
+                                    bank: bankName
                                 });
                             }
                         });
@@ -119,14 +139,14 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
             return { ...row, total: runningTotal };
         });
 
-    }, [vehicles, reportType, duration]);
+    }, [vehicles, reportType, duration, selectedBank]);
 
     return (
         <div className="p-4 md:p-6 pb-24">
             <h1 className="text-3xl font-bold text-indigo-400 mb-6">EMI Reports</h1>
             
             <div className="bg-slate-800 p-4 rounded-lg mb-6 shadow-lg border border-slate-700">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label className="block text-sm text-slate-400 mb-2">Report Type</label>
                         <div className="flex bg-slate-700 rounded-lg p-1">
@@ -134,7 +154,7 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
                                 onClick={() => setReportType('upcoming')}
                                 className={`flex-1 py-2 px-4 rounded-md text-sm font-bold transition-all ${reportType === 'upcoming' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                             >
-                                Upcoming EMIs
+                                Upcoming
                             </button>
                             <button 
                                 onClick={() => setReportType('paid')}
@@ -161,13 +181,31 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
                             <option value={365}>Next 1 Year</option>
                         </select>
                     </div>
+
+                    <div>
+                        <label className="block text-sm text-slate-400 mb-2">Filter by Bank</label>
+                        <select 
+                            value={selectedBank} 
+                            onChange={(e) => setSelectedBank(e.target.value)}
+                            className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg p-2.5 outline-none focus:border-indigo-500"
+                        >
+                            <option value="All">All Banks</option>
+                            {availableBanks.map(bank => (
+                                <option key={bank} value={bank}>{bank}</option>
+                            ))}
+                            <option value="-">No Bank Specified</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
             <div className="bg-slate-800 rounded-lg shadow-lg border border-slate-700 overflow-hidden">
                 <div className="p-4 border-b border-slate-700 flex justify-between items-center">
                     <h2 className="text-lg font-bold text-white">
-                        {reportType === 'upcoming' ? `Upcoming Payments (${duration} Days)` : `Payments History (${duration} Days)`}
+                        {reportType === 'upcoming' ? `Upcoming Payments` : `Payments History`}
+                         <span className="text-sm font-normal text-slate-400 ml-2">
+                             ({duration} days{selectedBank !== 'All' ? `, ${selectedBank}` : ''})
+                         </span>
                     </h2>
                     <span className="bg-slate-700 text-xs px-2 py-1 rounded text-slate-300">
                         {reportData.length} Records
