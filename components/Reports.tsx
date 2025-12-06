@@ -1,13 +1,14 @@
 
 import React, { useState, useMemo } from 'react';
-import { Vehicle, VehicleType } from '../types';
-import { DownloadIcon } from './icons';
+import { Vehicle, VehicleType, PREDEFINED_DOC_NAMES } from '../types';
+import { DownloadIcon, EmiIcon, DocumentIcon, ArrowLeftIcon } from './icons';
 
 interface ReportsProps {
   vehicles: Vehicle[];
 }
 
-type ReportType = 'upcoming' | 'paid';
+type ReportType = 'upcoming' | 'paid'; // For Docs: 'upcoming' = Expiring Soon, 'paid' = Expired
+type ReportCategory = 'emi' | 'doc' | null;
 type Duration = 7 | 15 | 30 | 60 | 90 | 180 | 365;
 
 const durations: Duration[] = [7, 15, 30, 60, 90, 180, 365];
@@ -35,9 +36,11 @@ const getVehicleDisplayName = (vehicle: Vehicle) => {
 };
 
 const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
+    const [category, setCategory] = useState<ReportCategory>(null);
     const [reportType, setReportType] = useState<ReportType>('upcoming');
     const [duration, setDuration] = useState<Duration>(30);
     const [selectedBank, setSelectedBank] = useState<string>('All');
+    const [selectedDocType, setSelectedDocType] = useState<string>('All');
 
     // Extract unique banks from all EMIs
     const availableBanks = useMemo(() => {
@@ -52,7 +55,26 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
         return Array.from(banks).sort();
     }, [vehicles]);
 
-    const reportData = useMemo(() => {
+    // Extract unique doc names, including all predefined types
+    const availableDocTypes = useMemo(() => {
+        // Start with predefined names
+        const types = new Set<string>(PREDEFINED_DOC_NAMES);
+        
+        // Add any custom names currently in use
+        vehicles.forEach(v => {
+            v.documents.forEach(d => types.add(d.name));
+        });
+        
+        // Remove 'Other' as it's usually just a selector for custom input
+        if (types.has('Other')) types.delete('Other');
+
+        return Array.from(types).sort();
+    }, [vehicles]);
+
+    // EMI Data Logic
+    const emiData = useMemo(() => {
+        if (category !== 'emi') return [];
+
         const rows: {
             date: string;
             dateObj: Date;
@@ -60,6 +82,7 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
             vehicleName: string;
             regNumber: string;
             bank: string;
+            total?: number;
         }[] = [];
 
         const today = new Date();
@@ -75,24 +98,20 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
 
         vehicles.forEach(vehicle => {
             vehicle.emis.forEach(emi => {
-                // Bank Filter Logic
                 const bankName = emi.emiBank ? emi.emiBank.trim() : '-';
                 if (selectedBank !== 'All' && bankName !== selectedBank) {
                     return;
                 }
 
                 if (reportType === 'upcoming') {
-                    // Calculate Upcoming Dates
                     if (emi.paidInstallments < emi.totalTenure) {
                         let [sY, sM, sD] = emi.startDate.split('-').map(Number);
                         if (sY < 100) sY += 2000;
                         
-                        // We iterate from current paid installment index up to total tenure
                         for (let i = emi.paidInstallments; i < emi.totalTenure; i++) {
                             const dueDate = new Date(sY, sM - 1 + i, sD);
                             const dueDateMidnight = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
                             
-                            // Check if date is within range [Today, TargetDate]
                             if (dueDateMidnight >= today && dueDateMidnight <= targetDate) {
                                 rows.push({
                                     date: formatDate(dueDateMidnight),
@@ -106,13 +125,11 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
                         }
                     }
                 } else {
-                    // Paid History
                     if (emi.paymentHistory) {
                         emi.paymentHistory.forEach(payment => {
                             const paidDate = new Date(payment.paidDate);
                             paidDate.setHours(0,0,0,0);
                             
-                            // Check if date is within range [TargetDate, Today]
                             if (paidDate >= targetDate && paidDate <= today) {
                                 rows.push({
                                     date: formatDate(paidDate),
@@ -129,21 +146,117 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
             });
         });
 
-        // Sort by Date
         rows.sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
 
-        // Calculate Cumulative Total
         let runningTotal = 0;
         return rows.map(row => {
             runningTotal += row.amount;
             return { ...row, total: runningTotal };
         });
 
-    }, [vehicles, reportType, duration, selectedBank]);
+    }, [vehicles, reportType, duration, selectedBank, category]);
+
+    // Document Data Logic
+    const docData = useMemo(() => {
+        if (category !== 'doc') return [];
+
+        const rows: {
+            date: string;
+            dateObj: Date;
+            docName: string;
+            vehicleName: string;
+            regNumber: string;
+        }[] = [];
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const targetDate = new Date(today);
+
+        if (reportType === 'upcoming') {
+            targetDate.setDate(today.getDate() + duration);
+        } else {
+            targetDate.setDate(today.getDate() - duration);
+        }
+
+        vehicles.forEach(vehicle => {
+            vehicle.documents.forEach(doc => {
+                if (selectedDocType !== 'All' && doc.name !== selectedDocType) return;
+
+                const expiryDate = new Date(doc.expiryDate);
+                // Reset time for accurate date comparison
+                const expiryDateMidnight = new Date(expiryDate.getFullYear(), expiryDate.getMonth(), expiryDate.getDate());
+
+                if (reportType === 'upcoming') {
+                    // Show docs expiring in the future (from Today to TargetDate)
+                    if (expiryDateMidnight >= today && expiryDateMidnight <= targetDate) {
+                        rows.push({
+                            date: formatDate(expiryDateMidnight),
+                            dateObj: expiryDateMidnight,
+                            docName: doc.name,
+                            vehicleName: getVehicleDisplayName(vehicle),
+                            regNumber: vehicle.registrationNumber
+                        });
+                    }
+                } else {
+                    // "Paid" aka "History" context for docs: Docs that expired in the past window
+                    if (expiryDateMidnight >= targetDate && expiryDateMidnight < today) {
+                         rows.push({
+                            date: formatDate(expiryDateMidnight),
+                            dateObj: expiryDateMidnight,
+                            docName: doc.name,
+                            vehicleName: getVehicleDisplayName(vehicle),
+                            regNumber: vehicle.registrationNumber
+                        });
+                    }
+                }
+            });
+        });
+
+        rows.sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
+        return rows;
+    }, [vehicles, reportType, duration, selectedDocType, category]);
+
+
+    // --- Selection Screen ---
+    if (!category) {
+        return (
+            <div className="p-4 md:p-6 pb-24 flex flex-col items-center justify-center min-h-[60vh]">
+                 <h1 className="text-3xl font-bold text-indigo-400 mb-8">Generate Report</h1>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-2xl">
+                     <button 
+                        onClick={() => setCategory('emi')}
+                        className="bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-indigo-500 rounded-xl p-8 flex flex-col items-center text-center transition-all group"
+                     >
+                        <div className="bg-indigo-900/50 p-4 rounded-full mb-4 group-hover:bg-indigo-600 transition-colors">
+                            <EmiIcon className="w-12 h-12 text-indigo-400 group-hover:text-white" />
+                        </div>
+                        <h2 className="text-xl font-bold text-white mb-2">EMI Report</h2>
+                        <p className="text-slate-400 text-sm">Generate financial reports for vehicle installments, loans, and payment history.</p>
+                     </button>
+
+                     <button 
+                        onClick={() => setCategory('doc')}
+                        className="bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-purple-500 rounded-xl p-8 flex flex-col items-center text-center transition-all group"
+                     >
+                        <div className="bg-purple-900/50 p-4 rounded-full mb-4 group-hover:bg-purple-600 transition-colors">
+                            <DocumentIcon className="w-12 h-12 text-purple-400 group-hover:text-white" />
+                        </div>
+                        <h2 className="text-xl font-bold text-white mb-2">Document Report</h2>
+                        <p className="text-slate-400 text-sm">Track document expiries like RC, Insurance, Permit, and Fitness certificates.</p>
+                     </button>
+                 </div>
+            </div>
+        );
+    }
 
     return (
         <div className="p-4 md:p-6 pb-24">
-            <h1 className="text-3xl font-bold text-indigo-400 mb-6">EMI Reports</h1>
+            <div className="flex items-center gap-2 mb-6">
+                <button onClick={() => setCategory(null)} className="text-slate-400 hover:text-white p-1 rounded-full hover:bg-slate-700">
+                    <ArrowLeftIcon className="w-6 h-6" />
+                </button>
+                <h1 className="text-3xl font-bold text-indigo-400">{category === 'emi' ? 'EMI Reports' : 'Document Reports'}</h1>
+            </div>
             
             <div className="bg-slate-800 p-4 rounded-lg mb-6 shadow-lg border border-slate-700">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -154,13 +267,13 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
                                 onClick={() => setReportType('upcoming')}
                                 className={`flex-1 py-2 px-4 rounded-md text-sm font-bold transition-all ${reportType === 'upcoming' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                             >
-                                Upcoming
+                                {category === 'emi' ? 'Upcoming' : 'Expiring Soon'}
                             </button>
                             <button 
                                 onClick={() => setReportType('paid')}
                                 className={`flex-1 py-2 px-4 rounded-md text-sm font-bold transition-all ${reportType === 'paid' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                             >
-                                Paid History
+                                {category === 'emi' ? 'Paid History' : 'Expired History'}
                             </button>
                         </div>
                     </div>
@@ -172,87 +285,129 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
                             onChange={(e) => setDuration(Number(e.target.value) as Duration)}
                             className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg p-2.5 outline-none focus:border-indigo-500"
                         >
-                            <option value={7}>Next 7 Days</option>
-                            <option value={15}>Next 15 Days</option>
-                            <option value={30}>Next 1 Month</option>
-                            <option value={60}>Next 2 Months</option>
-                            <option value={90}>Next 3 Months</option>
-                            <option value={180}>Next 6 Months</option>
-                            <option value={365}>Next 1 Year</option>
+                            <option value={7}>{category === 'emi' ? 'Next' : 'Last/Next'} 7 Days</option>
+                            <option value={15}>{category === 'emi' ? 'Next' : 'Last/Next'} 15 Days</option>
+                            <option value={30}>{category === 'emi' ? 'Next' : 'Last/Next'} 1 Month</option>
+                            <option value={60}>{category === 'emi' ? 'Next' : 'Last/Next'} 2 Months</option>
+                            <option value={90}>{category === 'emi' ? 'Next' : 'Last/Next'} 3 Months</option>
+                            <option value={180}>{category === 'emi' ? 'Next' : 'Last/Next'} 6 Months</option>
+                            <option value={365}>{category === 'emi' ? 'Next' : 'Last/Next'} 1 Year</option>
                         </select>
                     </div>
 
-                    <div>
-                        <label className="block text-sm text-slate-400 mb-2">Filter by Bank</label>
-                        <select 
-                            value={selectedBank} 
-                            onChange={(e) => setSelectedBank(e.target.value)}
-                            className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg p-2.5 outline-none focus:border-indigo-500"
-                        >
-                            <option value="All">All Banks</option>
-                            {availableBanks.map(bank => (
-                                <option key={bank} value={bank}>{bank}</option>
-                            ))}
-                            <option value="-">No Bank Specified</option>
-                        </select>
-                    </div>
+                    {category === 'emi' ? (
+                        <div>
+                            <label className="block text-sm text-slate-400 mb-2">Filter by Bank</label>
+                            <select 
+                                value={selectedBank} 
+                                onChange={(e) => setSelectedBank(e.target.value)}
+                                className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg p-2.5 outline-none focus:border-indigo-500"
+                            >
+                                <option value="All">All Banks</option>
+                                {availableBanks.map(bank => (
+                                    <option key={bank} value={bank}>{bank}</option>
+                                ))}
+                                <option value="-">No Bank Specified</option>
+                            </select>
+                        </div>
+                    ) : (
+                         <div>
+                            <label className="block text-sm text-slate-400 mb-2">Filter by Document</label>
+                            <select 
+                                value={selectedDocType} 
+                                onChange={(e) => setSelectedDocType(e.target.value)}
+                                className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg p-2.5 outline-none focus:border-indigo-500"
+                            >
+                                <option value="All">All Documents</option>
+                                {availableDocTypes.map(type => (
+                                    <option key={type} value={type}>{type}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
                 </div>
             </div>
 
             <div className="bg-slate-800 rounded-lg shadow-lg border border-slate-700 overflow-hidden">
                 <div className="p-4 border-b border-slate-700 flex justify-between items-center">
                     <h2 className="text-lg font-bold text-white">
-                        {reportType === 'upcoming' ? `Upcoming Payments` : `Payments History`}
-                         <span className="text-sm font-normal text-slate-400 ml-2">
-                             ({duration} days{selectedBank !== 'All' ? `, ${selectedBank}` : ''})
+                        {category === 'emi' 
+                            ? (reportType === 'upcoming' ? 'Upcoming Payments' : 'Payments History')
+                            : (reportType === 'upcoming' ? 'Expiring Documents' : 'Expired Documents')
+                        }
+                         <span className="text-sm font-normal text-slate-400 ml-2 hidden sm:inline">
+                             ({duration} days)
                          </span>
                     </h2>
                     <span className="bg-slate-700 text-xs px-2 py-1 rounded text-slate-300">
-                        {reportData.length} Records
+                        {category === 'emi' ? emiData.length : docData.length} Records
                     </span>
                 </div>
                 
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm text-slate-300">
-                        <thead className="bg-slate-700/50 text-xs uppercase text-slate-400 font-bold">
-                            <tr>
-                                <th className="px-4 py-3 whitespace-nowrap">Date</th>
-                                <th className="px-4 py-3 whitespace-nowrap">Amount</th>
-                                <th className="px-4 py-3 whitespace-nowrap">Vehicle / Loan</th>
-                                <th className="px-4 py-3 whitespace-nowrap">Reg / ID</th>
-                                <th className="px-4 py-3 whitespace-nowrap">Bank</th>
-                                <th className="px-4 py-3 whitespace-nowrap text-right text-indigo-300">Cumulative Total</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-700">
-                            {reportData.length === 0 ? (
+                    {category === 'emi' ? (
+                         <table className="w-full text-left text-sm text-slate-300">
+                            <thead className="bg-slate-700/50 text-xs uppercase text-slate-400 font-bold">
                                 <tr>
-                                    <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
-                                        No records found for this period.
-                                    </td>
+                                    <th className="px-4 py-3 whitespace-nowrap">Date</th>
+                                    <th className="px-4 py-3 whitespace-nowrap">Amount</th>
+                                    <th className="px-4 py-3 whitespace-nowrap">Vehicle / Loan</th>
+                                    <th className="px-4 py-3 whitespace-nowrap">Reg / ID</th>
+                                    <th className="px-4 py-3 whitespace-nowrap">Bank</th>
+                                    <th className="px-4 py-3 whitespace-nowrap text-right text-indigo-300">Cumulative Total</th>
                                 </tr>
-                            ) : (
-                                reportData.map((row, index) => (
-                                    <tr key={index} className="hover:bg-slate-700/30 transition-colors">
-                                        <td className="px-4 py-3 font-medium whitespace-nowrap text-white">{row.date}</td>
-                                        <td className="px-4 py-3 font-medium text-emerald-400 whitespace-nowrap">₹{row.amount.toLocaleString()}</td>
-                                        <td className="px-4 py-3 whitespace-nowrap">{row.vehicleName}</td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-400">{row.regNumber}</td>
-                                        <td className="px-4 py-3 whitespace-nowrap">{row.bank}</td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-indigo-300">₹{row.total.toLocaleString()}</td>
+                            </thead>
+                            <tbody className="divide-y divide-slate-700">
+                                {emiData.length === 0 ? (
+                                    <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">No records found.</td></tr>
+                                ) : (
+                                    emiData.map((row, index) => (
+                                        <tr key={index} className="hover:bg-slate-700/30 transition-colors">
+                                            <td className="px-4 py-3 font-medium whitespace-nowrap text-white">{row.date}</td>
+                                            <td className="px-4 py-3 font-medium text-emerald-400 whitespace-nowrap">₹{row.amount.toLocaleString()}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap">{row.vehicleName}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-400">{row.regNumber}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap">{row.bank}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-indigo-300">₹{row.total?.toLocaleString()}</td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                            {emiData.length > 0 && (
+                                <tfoot className="bg-slate-700/80 font-bold text-white">
+                                    <tr>
+                                        <td colSpan={5} className="px-4 py-3 text-right">Grand Total:</td>
+                                        <td className="px-4 py-3 text-right text-indigo-300">₹{emiData[emiData.length - 1].total?.toLocaleString()}</td>
                                     </tr>
-                                ))
+                                </tfoot>
                             )}
-                        </tbody>
-                        {reportData.length > 0 && (
-                            <tfoot className="bg-slate-700/80 font-bold text-white">
+                        </table>
+                    ) : (
+                         <table className="w-full text-left text-sm text-slate-300">
+                            <thead className="bg-slate-700/50 text-xs uppercase text-slate-400 font-bold">
                                 <tr>
-                                    <td colSpan={5} className="px-4 py-3 text-right">Grand Total:</td>
-                                    <td className="px-4 py-3 text-right text-indigo-300">₹{reportData[reportData.length - 1].total.toLocaleString()}</td>
+                                    <th className="px-4 py-3 whitespace-nowrap">Document Name</th>
+                                    <th className="px-4 py-3 whitespace-nowrap">Vehicle / Asset</th>
+                                    <th className="px-4 py-3 whitespace-nowrap">Reg Number</th>
+                                    <th className="px-4 py-3 whitespace-nowrap">{reportType === 'upcoming' ? 'Expiry Date' : 'Expired Date'}</th>
                                 </tr>
-                            </tfoot>
-                        )}
-                    </table>
+                            </thead>
+                            <tbody className="divide-y divide-slate-700">
+                                {docData.length === 0 ? (
+                                    <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-500">No documents found.</td></tr>
+                                ) : (
+                                    docData.map((row, index) => (
+                                        <tr key={index} className="hover:bg-slate-700/30 transition-colors">
+                                            <td className="px-4 py-3 font-medium text-purple-400 whitespace-nowrap">{row.docName}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap">{row.vehicleName}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-400">{row.regNumber}</td>
+                                            <td className="px-4 py-3 font-medium whitespace-nowrap text-white">{row.date}</td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    )}
                 </div>
             </div>
         </div>
