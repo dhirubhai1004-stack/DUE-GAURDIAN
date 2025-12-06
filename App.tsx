@@ -5,7 +5,7 @@ import { Vehicle, VehicleType, Emi, Document, PREDEFINED_DOC_NAMES, EmiPayment, 
 import Dashboard from './components/Dashboard';
 import Modal from './components/Modal';
 import Reports from './components/Reports';
-import { PlusIcon, ArrowLeftIcon, CarIcon, TruckIcon, MachineIcon, BikeIcon, DashboardIcon, VehicleIcon, DownloadIcon, EditIcon, DeleteIcon, CheckCircleIcon, OtherVehicleIcon, PersonalLoanIcon, BusinessLoanIcon, HomeLoanIcon, LogoutIcon, SettingsIcon, EyeIcon } from './components/icons';
+import { PlusIcon, ArrowLeftIcon, CarIcon, TruckIcon, MachineIcon, BikeIcon, DashboardIcon, VehicleIcon, DownloadIcon, EditIcon, DeleteIcon, CheckCircleIcon, OtherVehicleIcon, PersonalLoanIcon, BusinessLoanIcon, HomeLoanIcon, LogoutIcon, SettingsIcon, EyeIcon, BellIcon } from './components/icons';
 import AddToHomeScreenPrompt from './components/AddToHomeScreenPrompt';
 
 const vehicleTypeIcons: Record<string, React.ReactNode> = {
@@ -17,6 +17,33 @@ const vehicleTypeIcons: Record<string, React.ReactNode> = {
     [VehicleType.HomeLoan]: <HomeLoanIcon className="w-8 h-8 text-rose-400" />,
     [VehicleType.BusinessLoan]: <BusinessLoanIcon className="w-8 h-8 text-purple-400" />,
     [VehicleType.Overdraft]: <BusinessLoanIcon className="w-8 h-8 text-amber-400" />,
+};
+
+// Base64 Audio Data URIs (Short, offline-friendly sounds)
+const RINGTONES = {
+    subtle: {
+        name: 'Subtle (Digital)',
+        src: 'data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAADAAALcAAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEP/7kMQAA8AAABIAAAAEAQAAABJ2b3JiaXMAAAAAAkSSAAAAAAAAgDgAAAAAAAC4AU9nZ3MAAAAAAAAOAQAAAAAAAC7C6lsBHgAAAAEAAABTcHl4ATIuMAAAAAABAAAAAQAAAAAAANs4O5gAAAAAAAC7C6lsAQEAAABTcHl4ATIuMAAAAAABAAAAAQAAAAAAAP84O5gAAAAAAADfca88AAAAAAAAAAAAAAEAEAAA//7kMQAA8AAABIAAAAEAQAAABAAAB1Z2VuZ3RpYwYAAABJbmZvAAAAdm9yYmlzAzEAAAB2b3JiaXMrQkNWAQAIAAAAMVNjVnR6AAAAAABWb3JiaXMiQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMjQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMkQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMlQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMmQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMnQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMoQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMpQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMqQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMrQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMsQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMtQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMuQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMvQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMwQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMxQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXM/' 
+    },
+    attention: {
+        name: 'Attention (Alarm)',
+        src: 'data:audio/wav;base64,UklGRl9vT1BXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU' // Placeholder shortened for brevity, usually these are 10-20KB. I will use a reliable online beep sound approach or synthesize if needed. 
+        // For reliability in this environment, I'll use a standard accessible URL fallback if base64 is too long, but let's try a very short beep.
+        // Actually, a better approach for "Guardian" without external files is to generate a beep using Web Audio API if possible, but user wants "Ringtone".
+        // Let's use a standard reliable CDN for the demo to ensure it works properly.
+    },
+    urgent: {
+        name: 'Urgent (Siren)',
+        src: ''
+    }
+};
+
+// Using a reliable source for demo sounds since extensive Base64 bloats the file too much for this context.
+// In a real production build, these would be local mp3 files in public/ folder.
+const SOUND_URLS = {
+    subtle: 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg',
+    attention: 'https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg',
+    urgent: 'https://actions.google.com/sounds/v1/alarms/bugle_tune.ogg'
 };
 
 const getVehicleIcon = (type: string) => {
@@ -1054,11 +1081,13 @@ const SettingsModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
     reminderTime: string;
+    soundPreference: string;
     onTimeChange: (time: string) => void;
+    onSoundChange: (sound: string) => void;
     onLogout: () => void;
     onExport: () => void;
     onImport: (file: File) => void;
-}> = ({ isOpen, onClose, reminderTime, onTimeChange, onLogout, onExport, onImport }) => {
+}> = ({ isOpen, onClose, reminderTime, soundPreference, onTimeChange, onSoundChange, onLogout, onExport, onImport }) => {
     // Parse current time for default values
     const [h, m] = (reminderTime || '11:00').split(':').map(Number);
     const currentPeriod = h >= 12 ? 'PM' : 'AM';
@@ -1080,6 +1109,13 @@ const SettingsModal: React.FC<{
             onImport(e.target.files[0]);
         }
     };
+    
+    const playSound = (type: string) => {
+        const audioUrl = SOUND_URLS[type as keyof typeof SOUND_URLS];
+        if (audioUrl) {
+            new Audio(audioUrl).play().catch(e => console.error("Audio play failed", e));
+        }
+    };
 
     const hours = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
     const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
@@ -1091,7 +1127,7 @@ const SettingsModal: React.FC<{
                     <h3 className="text-lg font-semibold text-white mb-2">Notifications</h3>
                     <label className="block text-sm text-slate-400 mb-2">Default Reminder Time</label>
                     
-                    <div className="flex items-center gap-2 bg-slate-700 border border-slate-600 rounded p-2">
+                    <div className="flex items-center gap-2 bg-slate-700 border border-slate-600 rounded p-2 mb-4">
                          <select 
                             value={currentHourStr} 
                             onChange={(e) => handleTimeUpdate(e.target.value, currentMinuteStr, currentPeriod)}
@@ -1115,6 +1151,26 @@ const SettingsModal: React.FC<{
                             <option value="AM" className="bg-slate-800">AM</option>
                             <option value="PM" className="bg-slate-800">PM</option>
                         </select>
+                    </div>
+
+                    <label className="block text-sm text-slate-400 mb-2">Notification Sound (Ringtone)</label>
+                    <div className="flex items-center gap-2">
+                        <select 
+                            value={soundPreference || 'subtle'} 
+                            onChange={(e) => onSoundChange(e.target.value)}
+                            className="flex-grow bg-slate-700 border border-slate-600 text-white rounded p-2 outline-none"
+                        >
+                            <option value="subtle">Subtle (Digital)</option>
+                            <option value="attention">Attention (Alarm)</option>
+                            <option value="urgent">Urgent (Siren)</option>
+                        </select>
+                        <button 
+                            onClick={() => playSound(soundPreference || 'subtle')} 
+                            className="p-2 bg-indigo-600 hover:bg-indigo-700 rounded text-white"
+                            title="Test Sound"
+                        >
+                            <BellIcon className="w-5 h-5" />
+                        </button>
                     </div>
 
                     <p className="text-xs text-slate-500 mt-2">
@@ -1251,7 +1307,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
     // Key localStorage by currentUser to separate data
     const [vehicles, setVehicles] = useLocalStorage<Vehicle[]>(`${currentUser}_vehicles`, []);
     const [snoozed, setSnoozed] = useLocalStorage<Record<string, number>>(`${currentUser}_snoozedReminders`, {});
-    const [settings, setSettings] = useLocalStorage<{ reminderTime: string }>(`${currentUser}_settings`, { reminderTime: '11:00' });
+    const [settings, setSettings] = useLocalStorage<{ reminderTime: string, soundPreference?: string }>(`${currentUser}_settings`, { reminderTime: '11:00', soundPreference: 'subtle' });
     
     const [view, setView] = useState<View>('dashboard');
     const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
@@ -1309,8 +1365,9 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
         }
 
         const checkAlarms = () => {
-            if (Notification.permission !== 'granted') return;
-
+            // NOTE: We do NOT return if permission is not granted, because we might still want to play audio (alarm)
+            // even if visual notification is blocked, provided the app is open.
+            
             setVehicles(prevVehicles => {
                 const now = new Date();
                 const nowTimestamp = now.getTime();
@@ -1374,10 +1431,25 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
                                     const dateStr = `${String(nextDueDateMidnight.getDate()).padStart(2,'0')}/${String(nextDueDateMidnight.getMonth()+1).padStart(2,'0')}`;
                                     const message = `Your EMI of ₹${emi.amount.toLocaleString()} for ${vehicle.make} ${vehicle.model} is due tomorrow (${dateStr}).`;
                                     
+                                    // 1. Visual Notification
+                                    if (Notification.permission === 'granted') {
+                                        try {
+                                            new Notification('EMI Reminder', { body: message, tag: emi.id });
+                                        } catch (e) {
+                                            console.error("Failed to send notification", e);
+                                        }
+                                    }
+
+                                    // 2. Audio Ringtone
                                     try {
-                                        new Notification('EMI Reminder', { body: message, tag: emi.id });
+                                        const soundType = settings.soundPreference || 'subtle';
+                                        const audioUrl = SOUND_URLS[soundType as keyof typeof SOUND_URLS];
+                                        if (audioUrl) {
+                                            const audio = new Audio(audioUrl);
+                                            audio.play().catch(e => console.log('Audio autoplay blocked or failed', e));
+                                        }
                                     } catch (e) {
-                                        console.error("Failed to send notification", e);
+                                        console.error('Failed to play alarm sound', e);
                                     }
                                     
                                     currentAlarmConfig = {
@@ -1417,7 +1489,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
         const alarmInterval = setInterval(checkAlarms, 60000); // Check every minute
 
         return () => clearInterval(alarmInterval);
-    }, [settings.reminderTime, setVehicles]); // Only run effect when reminder time settings change or setVehicles reference changes
+    }, [settings.reminderTime, settings.soundPreference, setVehicles]); // Only run effect when reminder time settings change or setVehicles reference changes
 
     const handleSnoozeAlarm = (emiId: string, vehicleId: string) => {
         updateVehicle(vehicleId, v => {
@@ -1955,7 +2027,9 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
                 isOpen={isSettingsOpen}
                 onClose={() => setSettingsOpen(false)}
                 reminderTime={settings.reminderTime}
+                soundPreference={settings.soundPreference || 'subtle'}
                 onTimeChange={(time) => setSettings({ ...settings, reminderTime: time })}
+                onSoundChange={(sound) => setSettings({ ...settings, soundPreference: sound })}
                 onLogout={onLogout}
                 onExport={handleExportData}
                 onImport={handleImportData}
