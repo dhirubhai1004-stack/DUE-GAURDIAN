@@ -1289,88 +1289,113 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
 
     useEffect(() => {
         if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-            Notification.requestPermission();
+            try {
+                Notification.requestPermission();
+            } catch(e) { console.error("Notification permission request failed", e); }
         }
 
         const checkAlarms = () => {
-             if (Notification.permission !== 'granted') return;
+            if (Notification.permission !== 'granted') return;
 
-            const now = new Date();
-            const nowTimestamp = now.getTime();
-            // Use local YMD to prevent UTC shift issues in alarm checking
-            const todayYMD = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-            // Normalize current date to midnight for accurate diff calculation
-            const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            
-            let vehiclesUpdated = false;
-            const updatedVehicles = [...vehicles];
-
-            updatedVehicles.forEach(vehicle => {
-                // EMI Notifications
-                vehicle.emis.forEach(emi => {
-                    if (emi.paidInstallments >= emi.totalTenure) return;
-
-                    let [sY, sM, sD] = emi.startDate.split('-').map(Number);
-                    if (sY < 100) sY += 2000;
+            setVehicles(prevVehicles => {
+                const now = new Date();
+                const nowTimestamp = now.getTime();
+                // Use local YMD to prevent UTC shift issues in alarm checking
+                const todayYMD = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+                // Normalize current date to midnight for accurate diff calculation
+                const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                
+                let hasChanges = false;
+                
+                // We map to create a new array, but check if we actually changed anything
+                const newVehicles = prevVehicles.map(vehicle => {
+                    let vehicleChanged = false;
                     
-                    // Calculate Next Due Date
-                    const nextDueDate = new Date(sY, sM - 1 + emi.paidInstallments, sD);
-                    // Normalize Next Due Date to Midnight
-                    const nextDueDateMidnight = new Date(nextDueDate.getFullYear(), nextDueDate.getMonth(), nextDueDate.getDate());
+                    const newEmis = vehicle.emis.map(emi => {
+                        if (emi.paidInstallments >= emi.totalTenure) return emi;
 
-                    const diffTime = nextDueDateMidnight.getTime() - todayMidnight.getTime();
-                    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                        let [sY, sM, sD] = emi.startDate.split('-').map(Number);
+                        if (sY < 100) sY += 2000;
+                        
+                        // Calculate Next Due Date
+                        const nextDueDate = new Date(sY, sM - 1 + emi.paidInstallments, sD);
+                        // Normalize Next Due Date to Midnight
+                        const nextDueDateMidnight = new Date(nextDueDate.getFullYear(), nextDueDate.getMonth(), nextDueDate.getDate());
 
-                    // Rule: Alarm triggers for items in "Today" category (which corresponds to Due Tomorrow, i.e., diffDays === 1)
-                    if (diffDays === 1) {
-                        // 1. Initialize Alarm Config if missing for today
-                        if (!emi.alarmConfig || emi.alarmConfig.date !== todayYMD) {
-                            // Determine start time
-                            const defaultTimeStr = emi.alarmConfig?.manualTime || settings.reminderTime;
-                            const [h, m] = defaultTimeStr.split(':').map(Number);
-                            
-                            const triggerDate = new Date(now);
-                            triggerDate.setHours(h, m, 0, 0);
-                            
-                            const newConfig = {
-                                date: todayYMD,
-                                nextTrigger: triggerDate.toISOString(),
-                                snoozeCount: 0,
-                                manualTime: emi.alarmConfig?.manualTime, // Preserve manual time if exists from previous day setting (unlikely) or undefined
-                                hasRung: false,
-                                isDismissed: false,
-                                history: []
-                            };
-                            
-                            emi.alarmConfig = newConfig;
-                            vehiclesUpdated = true;
-                        }
+                        const diffTime = nextDueDateMidnight.getTime() - todayMidnight.getTime();
+                        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
-                        // 2. Check Trigger
-                        if (emi.alarmConfig && !emi.alarmConfig.isDismissed && !emi.alarmConfig.hasRung) {
-                            const triggerTime = new Date(emi.alarmConfig.nextTrigger).getTime();
-                            
-                            // If current time is past trigger time (within reasonable window or just "past")
-                            if (nowTimestamp >= triggerTime) {
-                                const dateStr = `${String(nextDueDateMidnight.getDate()).padStart(2,'0')}/${String(nextDueDateMidnight.getMonth()+1).padStart(2,'0')}`;
-                                const message = `Your EMI of ₹${emi.amount.toLocaleString()} for ${vehicle.make} ${vehicle.model} is due tomorrow (${dateStr}).`;
-                                new Notification('EMI Reminder', { body: message, tag: emi.id });
+                        // Rule: Alarm triggers for items in "Today" category (which corresponds to Due Tomorrow, i.e., diffDays === 1)
+                        if (diffDays === 1) {
+                            let currentAlarmConfig = emi.alarmConfig;
+                            let configChanged = false;
+
+                            // 1. Initialize Alarm Config if missing for today
+                            if (!currentAlarmConfig || currentAlarmConfig.date !== todayYMD) {
+                                // Determine start time
+                                const defaultTimeStr = currentAlarmConfig?.manualTime || settings.reminderTime;
+                                const [h, m] = defaultTimeStr.split(':').map(Number);
                                 
-                                emi.alarmConfig.hasRung = true;
-                                emi.alarmConfig.history.push({
-                                    timestamp: new Date().toISOString(),
-                                    action: 'ring' as const
-                                });
-                                vehiclesUpdated = true;
+                                const triggerDate = new Date(now);
+                                triggerDate.setHours(h, m, 0, 0);
+                                
+                                currentAlarmConfig = {
+                                    date: todayYMD,
+                                    nextTrigger: triggerDate.toISOString(),
+                                    snoozeCount: 0,
+                                    manualTime: currentAlarmConfig?.manualTime, 
+                                    hasRung: false,
+                                    isDismissed: false,
+                                    history: []
+                                };
+                                configChanged = true;
+                            }
+
+                            // 2. Check Trigger
+                            if (currentAlarmConfig && !currentAlarmConfig.isDismissed && !currentAlarmConfig.hasRung) {
+                                const triggerTime = new Date(currentAlarmConfig.nextTrigger).getTime();
+                                
+                                // If current time is past trigger time (within reasonable window or just "past")
+                                if (nowTimestamp >= triggerTime) {
+                                    const dateStr = `${String(nextDueDateMidnight.getDate()).padStart(2,'0')}/${String(nextDueDateMidnight.getMonth()+1).padStart(2,'0')}`;
+                                    const message = `Your EMI of ₹${emi.amount.toLocaleString()} for ${vehicle.make} ${vehicle.model} is due tomorrow (${dateStr}).`;
+                                    
+                                    try {
+                                        new Notification('EMI Reminder', { body: message, tag: emi.id });
+                                    } catch (e) {
+                                        console.error("Failed to send notification", e);
+                                    }
+                                    
+                                    currentAlarmConfig = {
+                                        ...currentAlarmConfig,
+                                        hasRung: true,
+                                        history: [...currentAlarmConfig.history, {
+                                            timestamp: new Date().toISOString(),
+                                            action: 'ring' as const
+                                        }]
+                                    };
+                                    configChanged = true;
+                                }
+                            }
+                            
+                            if (configChanged) {
+                                vehicleChanged = true;
+                                return { ...emi, alarmConfig: currentAlarmConfig };
                             }
                         }
+                        return emi;
+                    });
+                    
+                    if (vehicleChanged) {
+                        hasChanges = true;
+                        return { ...vehicle, emis: newEmis };
                     }
+                    return vehicle;
                 });
-            });
 
-            if (vehiclesUpdated) {
-                setVehicles(updatedVehicles);
-            }
+                // Only return new state if changes occurred to prevent re-renders
+                return hasChanges ? newVehicles : prevVehicles;
+            });
         };
 
         // Run immediately on mount then interval
@@ -1378,7 +1403,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
         const alarmInterval = setInterval(checkAlarms, 60000); // Check every minute
 
         return () => clearInterval(alarmInterval);
-    }, [vehicles, settings.reminderTime]);
+    }, [settings.reminderTime, setVehicles]); // Only run effect when reminder time settings change or setVehicles reference changes
 
     const handleSnoozeAlarm = (emiId: string, vehicleId: string) => {
         updateVehicle(vehicleId, v => {
