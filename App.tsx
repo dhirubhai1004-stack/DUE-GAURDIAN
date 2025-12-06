@@ -32,6 +32,19 @@ const formatDate = (dateString?: string): string => {
   return `${d}/${m}/${y.slice(-2)}`;
 };
 
+const getVehicleDisplayName = (vehicle: Vehicle) => {
+    const loanTypes = [
+        VehicleType.PersonalLoan, 
+        VehicleType.HomeLoan, 
+        VehicleType.BusinessLoan, 
+        VehicleType.Overdraft
+    ] as string[];
+
+    if (loanTypes.includes(vehicle.type)) return `${vehicle.make} ${vehicle.model}`;
+    if (vehicle.type === VehicleType.Truck) return `${vehicle.make} ${vehicle.model}`;
+    
+    return `${vehicle.type} - ${vehicle.make} ${vehicle.model}`;
+};
 
 type View = 'dashboard' | 'vehicleList' | 'vehicleDetail';
 
@@ -615,7 +628,7 @@ const VehicleList: React.FC<{ vehicles: Vehicle[], onSelectVehicle: (id: string)
                     <div className="flex items-center space-x-4">
                         {getVehicleIcon(v.type)}
                         <div>
-                            <p className="font-bold text-lg">{v.make} {v.model}</p>
+                            <p className="font-bold text-lg">{getVehicleDisplayName(v)}</p>
                             <p className="text-sm text-slate-400">{v.registrationNumber}</p>
                         </div>
                     </div>
@@ -696,7 +709,7 @@ const VehicleDetail: React.FC<{
                 <div className="flex items-center space-x-4">
                     {getVehicleIcon(vehicle.type)}
                     <div>
-                        <h1 className="text-2xl font-bold">{vehicle.make} {vehicle.model}</h1>
+                        <h1 className="text-2xl font-bold">{getVehicleDisplayName(vehicle)}</h1>
                         <p className="text-slate-400">{vehicle.registrationNumber}</p>
                     </div>
                 </div>

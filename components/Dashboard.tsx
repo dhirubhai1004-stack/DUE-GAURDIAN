@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Vehicle, ReminderItem, ReminderCategory, Emi, Document as DocType, MACHINE_TYPES } from '../types';
+import { Vehicle, ReminderItem, ReminderCategory, Emi, Document as DocType, MACHINE_TYPES, VehicleType } from '../types';
 import { CarIcon, TruckIcon, BikeIcon, MachineIcon, DocumentIcon, EmiIcon, SnoozeIcon, OtherVehicleIcon, CheckCircleIcon, PersonalLoanIcon, BusinessLoanIcon, HomeLoanIcon, ClockIcon, BellIcon, BellSlashIcon } from './icons';
 
 interface DashboardProps {
@@ -38,6 +38,28 @@ const getVehicleIcon = (type: string) => {
         case 'Overdraft / CC': return <BusinessLoanIcon className="w-5 h-5 mr-2 text-amber-400" />;
         default: return <OtherVehicleIcon className="w-5 h-5 mr-2 text-slate-400" />;
     }
+};
+
+const getVehicleDisplayName = (vehicle: Vehicle) => {
+    const loanTypes = [
+        VehicleType.PersonalLoan, 
+        VehicleType.HomeLoan, 
+        VehicleType.BusinessLoan, 
+        VehicleType.Overdraft
+    ] as string[];
+
+    // If it's a loan, just show Bank + Purpose
+    if (loanTypes.includes(vehicle.type)) {
+        return `${vehicle.make} ${vehicle.model}`;
+    }
+
+    // If it's a Truck, user specifically requested NO prefix
+    if (vehicle.type === VehicleType.Truck) {
+        return `${vehicle.make} ${vehicle.model}`;
+    }
+
+    // For everything else (Car, Bike, Machines, etc.), add the prefix
+    return `${vehicle.type} - ${vehicle.make} ${vehicle.model}`;
 };
 
 const getCategoryStyle = (category: ReminderCategory) => {
@@ -93,7 +115,7 @@ const ReminderCard: React.FC<{
                     <div>
                         <div className="flex items-center text-slate-300">
                             {getVehicleIcon(item.vehicle.type)}
-                            <span className="font-semibold">{item.vehicle.make} {item.vehicle.model}</span>
+                            <span className="font-semibold">{getVehicleDisplayName(item.vehicle)}</span>
                         </div>
                         <p className="text-sm text-slate-400">{item.vehicle.registrationNumber}</p>
                     </div>
