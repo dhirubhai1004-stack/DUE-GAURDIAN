@@ -104,3 +104,7 @@ export const BellIcon: React.FC<{ className?: string }> = ({ className }) => (
 export const BellSlashIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M21.19 21.19 2.81 2.81 1.39 4.22l4.2 4.2c-1.01.9-1.59 2.2-1.59 3.58v5l-2 2v1h15.17l2.8 2.8 1.42-1.41zM8 17v-5c0-.78.2-1.52.56-2.16L15.17 16.42 14 17H8zm8.5-5.5c0-2.48-1.51-4.5-4-4.5-.64 0-1.26.14-1.82.37L18.5 15.17V11.5zM12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2z"></path></svg>
 );
+
+export const EyeIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"></path></svg>
+);

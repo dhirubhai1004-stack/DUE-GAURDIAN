@@ -4,7 +4,8 @@ import useLocalStorage from './hooks/useLocalStorage';
 import { Vehicle, VehicleType, Emi, Document, PREDEFINED_DOC_NAMES, EmiPayment, AlarmLog, MACHINE_TYPES } from './types';
 import Dashboard from './components/Dashboard';
 import Modal from './components/Modal';
-import { PlusIcon, ArrowLeftIcon, CarIcon, TruckIcon, MachineIcon, BikeIcon, DashboardIcon, VehicleIcon, DownloadIcon, EditIcon, DeleteIcon, CheckCircleIcon, OtherVehicleIcon, PersonalLoanIcon, BusinessLoanIcon, HomeLoanIcon, LogoutIcon, SettingsIcon } from './components/icons';
+import Reports from './components/Reports';
+import { PlusIcon, ArrowLeftIcon, CarIcon, TruckIcon, MachineIcon, BikeIcon, DashboardIcon, VehicleIcon, DownloadIcon, EditIcon, DeleteIcon, CheckCircleIcon, OtherVehicleIcon, PersonalLoanIcon, BusinessLoanIcon, HomeLoanIcon, LogoutIcon, SettingsIcon, EyeIcon } from './components/icons';
 import AddToHomeScreenPrompt from './components/AddToHomeScreenPrompt';
 
 const vehicleTypeIcons: Record<string, React.ReactNode> = {
@@ -46,7 +47,7 @@ const getVehicleDisplayName = (vehicle: Vehicle) => {
     return `${vehicle.type} - ${vehicle.make} ${vehicle.model}`;
 };
 
-type View = 'dashboard' | 'vehicleList' | 'vehicleDetail';
+type View = 'dashboard' | 'vehicleList' | 'vehicleDetail' | 'reports';
 
 // Helper components defined outside App to prevent re-renders
 const VehicleFormModal: React.FC<{ 
@@ -1865,6 +1866,8 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
                 }
                 setView('vehicleList'); // Fallback if vehicle not found
                 return null;
+            case 'reports':
+                return <Reports vehicles={vehicles} />;
             case 'dashboard':
             default:
                 return <Dashboard 
@@ -1914,6 +1917,12 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
                         <DashboardIcon className="w-6 h-6" />
                         <span className="text-xs font-medium">Dashboard</span>
                     </button>
+                    
+                    <button onClick={() => setView('reports')} className={`flex flex-col items-center space-y-1 ${view === 'reports' ? 'text-indigo-400' : 'text-slate-400 hover:text-white'}`}>
+                        <EyeIcon className="w-8 h-8" />
+                        <span className="text-xs font-medium">Reports</span>
+                    </button>
+
                     <button onClick={() => setView('vehicleList')} className={`flex flex-col items-center space-y-1 ${view === 'vehicleList' || view === 'vehicleDetail' ? 'text-indigo-400' : 'text-slate-400 hover:text-white'}`}>
                         <VehicleIcon className="w-6 h-6" />
                         <span className="text-xs font-medium">Items</span>
