@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import useLocalStorage from './hooks/useLocalStorage';
 import { Vehicle, VehicleType, Emi, Document, PREDEFINED_DOC_NAMES, EmiPayment, AlarmLog, MACHINE_TYPES } from './types';
@@ -7,6 +6,23 @@ import Modal from './components/Modal';
 import Reports from './components/Reports';
 import { PlusIcon, ArrowLeftIcon, CarIcon, TruckIcon, MachineIcon, BikeIcon, DashboardIcon, VehicleIcon, DownloadIcon, EditIcon, DeleteIcon, CheckCircleIcon, OtherVehicleIcon, PersonalLoanIcon, BusinessLoanIcon, HomeLoanIcon, LogoutIcon, SettingsIcon, EyeIcon, BellIcon } from './components/icons';
 import AddToHomeScreenPrompt from './components/AddToHomeScreenPrompt';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+
+// --- DEVELOPER CONFIGURATION ---
+// Your Supabase Keys
+const SUPABASE_URL = "https://wpvcibnicferikuovnlt.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndwdmNpYm5pY2ZlcmlrdW92bmx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUxMDA1NDcsImV4cCI6MjA4MDY3NjU0N30.F6ySW6GoJAUTfG9eQW8xWxNTjfO4m5x1QBs-KA1v3uk";
+
+// --- Supabase Client Init ---
+let supabase: SupabaseClient | null = null;
+
+try {
+    if (SUPABASE_URL && SUPABASE_ANON_KEY && SUPABASE_URL.startsWith('http')) {
+        supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+} catch (e) {
+    console.error("Supabase init failed", e);
+}
 
 const vehicleTypeIcons: Record<string, React.ReactNode> = {
     [VehicleType.Car]: <CarIcon className="w-8 h-8 text-blue-400" />,
@@ -20,26 +36,6 @@ const vehicleTypeIcons: Record<string, React.ReactNode> = {
 };
 
 // Base64 Audio Data URIs (Short, offline-friendly sounds)
-const RINGTONES = {
-    subtle: {
-        name: 'Subtle (Digital)',
-        src: 'data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAADAAALcAAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEP/7kMQAA8AAABIAAAAEAQAAABJ2b3JiaXMAAAAAAkSSAAAAAAAAgDgAAAAAAAC4AU9nZ3MAAAAAAAAOAQAAAAAAAC7C6lsBHgAAAAEAAABTcHl4ATIuMAAAAAABAAAAAQAAAAAAANs4O5gAAAAAAAC7C6lsAQEAAABTcHl4ATIuMAAAAAABAAAAAQAAAAAAAP84O5gAAAAAAADfca88AAAAAAAAAAAAAAEAEAAA//7kMQAA8AAABIAAAAEAQAAABAAAB1Z2VuZ3RpYwYAAABJbmZvAAAAdm9yYmlzAzEAAAB2b3JiaXMrQkNWAQAIAAAAMVNjVnR6AAAAAABWb3JiaXMiQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMjQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMkQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMlQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMmQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMnQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMoQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMpQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMqQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMrQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMsQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMtQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMuQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMvQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMwQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXMxQkNWAQACAAAAAkRjVnQ4AAAAAABWb3JiaXM/' 
-    },
-    attention: {
-        name: 'Attention (Alarm)',
-        src: 'data:audio/wav;base64,UklGRl9vT1BXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU' // Placeholder shortened for brevity, usually these are 10-20KB. I will use a reliable online beep sound approach or synthesize if needed. 
-        // For reliability in this environment, I'll use a standard accessible URL fallback if base64 is too long, but let's try a very short beep.
-        // Actually, a better approach for "Guardian" without external files is to generate a beep using Web Audio API if possible, but user wants "Ringtone".
-        // Let's use a standard reliable CDN for the demo to ensure it works properly.
-    },
-    urgent: {
-        name: 'Urgent (Siren)',
-        src: ''
-    }
-};
-
-// Using a reliable source for demo sounds since extensive Base64 bloats the file too much for this context.
-// In a real production build, these would be local mp3 files in public/ folder.
 const SOUND_URLS = {
     subtle: 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg',
     attention: 'https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg',
@@ -147,7 +143,6 @@ const VehicleFormModal: React.FC<{
                 setModel(initialData.model);
                 setRegNum(initialData.registrationNumber);
                 
-                // Check if it's one of the specific machine types
                 if (MACHINE_TYPES.includes(initialData.type as any)) {
                     setType(initialData.type);
                     setCustomType('');
@@ -173,7 +168,6 @@ const VehicleFormModal: React.FC<{
 
     const availableTypes = mode === 'asset' ? assetTypes : loanTypes;
     const isLoanMode = mode === 'loan';
-
     const placeholderMake = isLoanMode ? "Lender / Bank Name (e.g., HDFC)" : "Make (e.g., Honda)";
     const placeholderModel = isLoanMode ? "Loan Purpose / Name (e.g., Home Renovation)" : "Model (e.g., Civic)";
     const placeholderReg = isLoanMode ? "Loan Account Number" : "Registration Number";
@@ -182,7 +176,6 @@ const VehicleFormModal: React.FC<{
         ? (isLoanMode ? "Edit Loan Details" : "Edit Asset Details")
         : (isLoanMode ? "Add New Loan" : "Add New Asset");
 
-    // Helper to determine what to show in the main category dropdown
     const getCategoryFromType = (t: string) => {
         if (MACHINE_TYPES.includes(t as any)) return VehicleType.Machine;
         if (t === VehicleType.Other || ![...assetTypes, ...loanTypes].includes(t as any)) return VehicleType.Other;
@@ -193,7 +186,6 @@ const VehicleFormModal: React.FC<{
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        // If category is Other, use customType. If category is Machine, 'type' already holds the subtype (e.g. Excavator) or default 'Machine'
         const finalType = currentCategory === VehicleType.Other ? customType : type;
         if (!make || !model || !regNum || !finalType) return;
         onSave({ make, model, registrationNumber: regNum.toUpperCase(), type: finalType });
@@ -209,10 +201,6 @@ const VehicleFormModal: React.FC<{
                     onChange={e => {
                         const newCategory = e.target.value;
                         if (newCategory === VehicleType.Machine) {
-                            // Default to first machine type or just Machine if desired, but user wants options.
-                            // Let's default to the generic 'Machine' category icon behavior first, then they pick subtype.
-                            // But our state 'type' needs to be one of the MACHINE_TYPES if they pick one.
-                            // Let's reset to first machine type for convenience
                             setType(MACHINE_TYPES[0]);
                         } else {
                             setType(newCategory);
@@ -323,10 +311,8 @@ const EmiFormModal: React.FC<{
                 setBank(initialData.emiBank || '');
                 setTotalCost(String(initialData.totalVehicleCost || ''));
                 setDownPayment(String(initialData.downPayment || ''));
-                // Note: We don't pre-fill paidTillDate as it's a one-time calculation tool
             }
         } else {
-            // Reset form when modal closes
             setAmount(''); setStartDate(''); setTotalTenure('');
             setInterest(''); setProvider(''); setLoanId(''); setBank('');
             setCalculatedEndDate(null); setPaidTillDate('');
@@ -365,7 +351,6 @@ const EmiFormModal: React.FC<{
             return;
         }
         
-        // Recalculate paid installments only if paidTillDate is provided by the user
         if (startDate && paidTillDate && tenureNum > 0) {
             if (new Date(paidTillDate) < new Date(startDate)) {
                 setError("Paid Till Date cannot be earlier than Start Date.");
@@ -582,7 +567,6 @@ const AddDocModal: React.FC<{
                     setDocName(name as (typeof PREDEFINED_DOC_NAMES)[number]);
                     setCustomDocName('');
                 } else if (PREDEFINED_DOC_NAMES.includes(name as any)) {
-                    // Fallback if name exists in PREDEFINED but not in filtered list (e.g. changed type)
                     setDocName('Other');
                     setCustomDocName(name);
                 } else {
@@ -609,20 +593,16 @@ const AddDocModal: React.FC<{
         if (file) {
             setIsProcessing(true);
             setFileName(file.name);
-            
             try {
                 if (file.type.startsWith('image/')) {
-                    // Compress image before saving
                     const compressedData = await compressImage(file);
                     setFileData(compressedData);
                 } else {
-                    // Check file size for non-images
-                    if (file.size > 2 * 1024 * 1024) { // 2MB limit for raw files
+                    if (file.size > 2 * 1024 * 1024) {
                         alert("File is too large! Please upload a file smaller than 2MB.");
                         setFileName(undefined);
                         setFileData(undefined);
                     } else {
-                        // Read other files as raw base64
                         const reader = new FileReader();
                         reader.onload = (e) => setFileData(e.target?.result as string);
                         reader.readAsDataURL(file);
@@ -789,18 +769,6 @@ const VehicleDetail: React.FC<{
         }
     };
 
-    const groupDocsByYear = (docs: Document[]) => {
-        return docs.reduce((acc, doc) => {
-            const year = new Date(doc.expiryDate).getFullYear();
-            if (!acc[year]) {
-                acc[year] = [];
-            }
-            acc[year].push(doc);
-            return acc;
-        }, {} as Record<string, Document[]>);
-    };
-    const archivedDocsByYear = groupDocsByYear(vehicle.archivedDocuments || []);
-
     return (
         <div className="p-4 md:p-6">
             <button onClick={onBack} className="flex items-center space-x-2 text-indigo-400 mb-4">
@@ -836,7 +804,6 @@ const VehicleDetail: React.FC<{
                 <div className="space-y-3">
                     {activeEmis.map(emi => {
                         const remainingAmount = (emi.totalTenure - emi.paidInstallments) * emi.amount;
-                        
                         let [sY, sM, sD] = emi.startDate.split('-').map(Number);
                         if (sY < 100) sY += 2000;
 
@@ -847,7 +814,6 @@ const VehicleDetail: React.FC<{
 
                         const today = new Date();
                         today.setHours(0, 0, 0, 0);
-                        // Compare time to ignore timezone issues
                         const isBeforeToday = nextDueDate.getTime() < today.getTime();
                         
                         const monthsDiff = (nextDueDate.getFullYear() - today.getFullYear()) * 12 + nextDueDate.getMonth() - today.getMonth();
@@ -924,7 +890,6 @@ const VehicleDetail: React.FC<{
                         const today = new Date();
                         today.setHours(0, 0, 0, 0);
                         const expiry = new Date(doc.expiryDate);
-                        // Use getTime to compare properly
                         const isExpired = expiry.getTime() < today.getTime();
                         const timeDiff = expiry.getTime() - today.getTime();
                         const daysUntilExpiry = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
@@ -1185,7 +1150,6 @@ const SettingsModal: React.FC<{
     onExport: () => void;
     onImport: (file: File) => void;
 }> = ({ isOpen, onClose, reminderTime, soundPreference, onTimeChange, onSoundChange, onLogout, onExport, onImport }) => {
-    // Parse current time for default values
     const [h, m] = (reminderTime || '11:00').split(':').map(Number);
     const currentPeriod = h >= 12 ? 'PM' : 'AM';
     const currentHour12 = h % 12 || 12;
@@ -1223,7 +1187,6 @@ const SettingsModal: React.FC<{
                 <div>
                     <h3 className="text-lg font-semibold text-white mb-2">Notifications</h3>
                     <label className="block text-sm text-slate-400 mb-2">Default Reminder Time</label>
-                    
                     <div className="flex items-center gap-2 bg-slate-700 border border-slate-600 rounded p-2 mb-4">
                          <select 
                             value={currentHourStr} 
@@ -1269,16 +1232,12 @@ const SettingsModal: React.FC<{
                             <BellIcon className="w-5 h-5" />
                         </button>
                     </div>
-
-                    <p className="text-xs text-slate-500 mt-2">
-                        This is the default time for new daily reminders. You can set specific times for items due today on the dashboard.
-                    </p>
                 </div>
 
                 <div className="pt-4 border-t border-slate-700">
                     <h3 className="text-lg font-semibold text-white mb-2">Data Backup & Restore</h3>
                     <p className="text-xs text-slate-400 mb-3">
-                        Since this app saves data offline on your device, use this to transfer data between phones.
+                        Use this to transfer data between phones if offline.
                     </p>
                     <div className="flex gap-2">
                          <button onClick={onExport} className="flex-1 bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-2 rounded flex items-center justify-center gap-2 text-sm">
@@ -1297,56 +1256,47 @@ const SettingsModal: React.FC<{
                      <h3 className="text-lg font-semibold text-white mb-2">Account</h3>
                      <button onClick={onLogout} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded flex items-center justify-center gap-2">
                         <LogoutIcon className="w-5 h-5" />
-                        <span>Logout / Switch Profile</span>
+                        <span>Logout</span>
                      </button>
-                     <p className="text-xs text-slate-500 mt-2 text-center">
-                        Logs out the current session. Data is stored locally on this device.
-                     </p>
                 </div>
             </div>
          </Modal>
     );
 }
 
-const Login: React.FC<{ onLogin: (user: string) => void }> = ({ onLogin }) => {
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [username, setUsername] = useState('');
+// --- Auth Components ---
+
+const AuthScreen: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    if (!username || !password) {
-      setError('Please fill in all fields');
-      return;
+    if (!supabase) {
+        setError("Database not connected. Please check configuration.");
+        return;
     }
+    setError('');
+    setLoading(true);
 
-    // In a real app, this would be a server call.
-    // For this local version, we store user credentials in a separate localStorage key.
-    const users = JSON.parse(localStorage.getItem('app_users') || '{}');
-
-    if (isRegistering) {
-      if (users[username]) {
-        setError('Username already exists');
-        return;
-      }
-
-      // Password Validation
-      if (password.length < 4) {
-        setError('Password must be at least 4 characters long.');
-        return;
-      }
-
-      users[username] = password; // In real app, hash this!
-      localStorage.setItem('app_users', JSON.stringify(users));
-      onLogin(username);
-    } else {
-      if (users[username] && users[username] === password) {
-        onLogin(username);
-      } else {
-        setError('Invalid username or password');
-      }
+    try {
+        if (isSignUp) {
+            const { error } = await supabase.auth.signUp({ email, password });
+            if (error) throw error;
+            alert("Registration successful! Please login.");
+            setIsSignUp(false);
+        } else {
+            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) throw error;
+            onLogin();
+        }
+    } catch (err: any) {
+        setError(err.message);
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -1365,29 +1315,27 @@ const Login: React.FC<{ onLogin: (user: string) => void }> = ({ onLogin }) => {
             <h1 className="text-3xl font-bold text-white">Due Guardian</h1>
           </div>
           <h2 className="text-xl font-bold text-indigo-400 mb-2 text-center">
-            {isRegistering ? 'Create Local Profile' : 'Login to Profile'}
+            {isSignUp ? 'Create Account' : 'Welcome Back'}
           </h2>
-          <p className="text-xs text-slate-400 text-center mb-6">
-             Note: Data is stored <strong>offline on this device</strong>. To move data to another phone, use the Backup feature in Settings.
-          </p>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          
+          <form onSubmit={handleSubmit} className="space-y-4 mt-6">
              {error && <div className="bg-red-900/50 text-red-200 p-3 rounded text-sm text-center border border-red-500/50">{error}</div>}
              <div>
-               <label className="block text-sm text-slate-400 mb-1">Username (Profile Name)</label>
-               <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white focus:border-indigo-500 outline-none" />
+               <label className="block text-sm text-slate-400 mb-1">Email</label>
+               <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white focus:border-indigo-500 outline-none" required />
              </div>
              <div>
                <label className="block text-sm text-slate-400 mb-1">Password</label>
-               <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white focus:border-indigo-500 outline-none" />
+               <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white focus:border-indigo-500 outline-none" required minLength={6} />
              </div>
-             <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 p-2 rounded text-white font-bold mt-4 transition-colors">
-               {isRegistering ? 'Create Profile' : 'Login'}
+             <button type="submit" disabled={loading || !supabase} className="w-full bg-indigo-600 hover:bg-indigo-700 p-2 rounded text-white font-bold mt-4 transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
+               {loading ? 'Processing...' : (isSignUp ? 'Sign Up' : 'Login')}
              </button>
           </form>
           <p className="text-center text-slate-400 text-sm mt-6">
-            {isRegistering ? 'Already have a profile?' : "New to this device?"}
-            <button onClick={() => { setIsRegistering(!isRegistering); setError(''); }} className="text-indigo-400 hover:underline ml-1 font-semibold">
-              {isRegistering ? 'Login' : 'Create Profile'}
+            {isSignUp ? 'Already have an account?' : "Don't have an account?"}
+            <button onClick={() => { setIsSignUp(!isSignUp); setError(''); }} className="text-indigo-400 hover:underline ml-1 font-semibold">
+              {isSignUp ? 'Login' : 'Sign Up'}
             </button>
           </p>
        </div>
@@ -1396,16 +1344,78 @@ const Login: React.FC<{ onLogin: (user: string) => void }> = ({ onLogin }) => {
 }
 
 interface AuthenticatedAppProps {
-    currentUser: string;
+    currentUser: string; // Used for localStorage key prefix
+    userId: string; // Supabase User ID
     onLogout: () => void;
 }
 
-const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogout }) => {
-    // Key localStorage by currentUser to separate data
+const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, userId, onLogout }) => {
+    // Key localStorage by currentUser to separate data (Legacy fallback)
     const [vehicles, setVehicles] = useLocalStorage<Vehicle[]>(`${currentUser}_vehicles`, []);
     const [snoozed, setSnoozed] = useLocalStorage<Record<string, number>>(`${currentUser}_snoozedReminders`, {});
     const [settings, setSettings] = useLocalStorage<{ reminderTime: string, soundPreference?: string }>(`${currentUser}_settings`, { reminderTime: '11:00', soundPreference: 'subtle' });
     
+    // --- Sync State Logic ---
+    const [isSyncing, setIsSyncing] = useState(false);
+    const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // 1. Load remote data on mount
+    useEffect(() => {
+        const fetchRemoteData = async () => {
+            if (!supabase) return;
+            setIsSyncing(true);
+            try {
+                const { data, error } = await supabase
+                    .from('user_data')
+                    .select('*')
+                    .eq('user_id', userId)
+                    .single();
+                
+                if (data) {
+                    // Only update local if remote exists and has data
+                    if (data.vehicles && Array.isArray(data.vehicles)) setVehicles(data.vehicles);
+                    if (data.snoozed) setSnoozed(data.snoozed);
+                    if (data.settings) setSettings(data.settings);
+                } else if (error && error.code !== 'PGRST116') {
+                    console.error("Fetch error:", error);
+                }
+            } catch (err) {
+                console.error("Sync load error", err);
+            } finally {
+                setIsSyncing(false);
+            }
+        };
+        fetchRemoteData();
+    }, [userId]);
+
+    // 2. Save to remote on change (Debounced)
+    useEffect(() => {
+        if (!supabase) return;
+        
+        if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+        
+        syncTimeoutRef.current = setTimeout(async () => {
+            setIsSyncing(true);
+            try {
+                const { error } = await supabase.from('user_data').upsert({
+                    user_id: userId,
+                    vehicles,
+                    snoozed,
+                    settings,
+                    updated_at: new Date().toISOString()
+                });
+                if (error) console.error("Sync save error", error);
+            } catch (err) {
+                console.error("Sync error", err);
+            } finally {
+                setIsSyncing(false);
+            }
+        }, 2000); // 2 second debounce
+
+        return () => { if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current); };
+    }, [vehicles, snoozed, settings, userId]);
+
+
     const [view, setView] = useState<View>('dashboard');
     const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
     const [isVehicleFormModalOpen, setVehicleFormModalOpen] = useState(false);
@@ -1425,18 +1435,10 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
     const [isSettingsOpen, setSettingsOpen] = useState(false);
 
     useEffect(() => {
-        // Check if running as a PWA
         setIsRunningStandalone(window.matchMedia('(display-mode: standalone)').matches);
-        
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js')
-                    .then(registration => {
-                        console.log('Service Worker registered with scope:', registration.scope);
-                    })
-                    .catch(error => {
-                        console.error('Service Worker registration failed:', error);
-                    });
+                navigator.serviceWorker.register('sw.js').catch(() => {});
             });
         }
     }, []);
@@ -1446,67 +1448,39 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
             e.preventDefault();
             setInstallPrompt(e);
         };
-
         window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-        return () => {
-            window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-        };
+        return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     }, []);
 
     useEffect(() => {
         if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-            try {
-                Notification.requestPermission();
-            } catch(e) { console.error("Notification permission request failed", e); }
+            try { Notification.requestPermission(); } catch(e) {}
         }
-
         const checkAlarms = () => {
-            // NOTE: We do NOT return if permission is not granted, because we might still want to play audio (alarm)
-            // even if visual notification is blocked, provided the app is open.
-            
             setVehicles(prevVehicles => {
                 const now = new Date();
                 const nowTimestamp = now.getTime();
-                // Use local YMD to prevent UTC shift issues in alarm checking
                 const todayYMD = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-                // Normalize current date to midnight for accurate diff calculation
                 const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                
                 let hasChanges = false;
-                
-                // We map to create a new array, but check if we actually changed anything
                 const newVehicles = prevVehicles.map(vehicle => {
                     let vehicleChanged = false;
-                    
                     const newEmis = vehicle.emis.map(emi => {
                         if (emi.paidInstallments >= emi.totalTenure) return emi;
-
                         let [sY, sM, sD] = emi.startDate.split('-').map(Number);
                         if (sY < 100) sY += 2000;
-                        
-                        // Calculate Next Due Date
                         const nextDueDate = new Date(sY, sM - 1 + emi.paidInstallments, sD);
-                        // Normalize Next Due Date to Midnight
                         const nextDueDateMidnight = new Date(nextDueDate.getFullYear(), nextDueDate.getMonth(), nextDueDate.getDate());
-
                         const diffTime = nextDueDateMidnight.getTime() - todayMidnight.getTime();
                         const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
-                        // Rule: Alarm triggers for items in "Today" category (which corresponds to Due Tomorrow, i.e., diffDays === 1)
                         if (diffDays === 1) {
                             let currentAlarmConfig = emi.alarmConfig;
                             let configChanged = false;
-
-                            // 1. Initialize Alarm Config if missing for today
                             if (!currentAlarmConfig || currentAlarmConfig.date !== todayYMD) {
-                                // Determine start time
                                 const defaultTimeStr = currentAlarmConfig?.manualTime || settings.reminderTime;
                                 const [h, m] = defaultTimeStr.split(':').map(Number);
-                                
                                 const triggerDate = new Date(now);
                                 triggerDate.setHours(h, m, 0, 0);
-                                
                                 currentAlarmConfig = {
                                     date: todayYMD,
                                     nextTrigger: triggerDate.toISOString(),
@@ -1518,75 +1492,37 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
                                 };
                                 configChanged = true;
                             }
-
-                            // 2. Check Trigger
                             if (currentAlarmConfig && !currentAlarmConfig.isDismissed && !currentAlarmConfig.hasRung) {
                                 const triggerTime = new Date(currentAlarmConfig.nextTrigger).getTime();
-                                
-                                // If current time is past trigger time (within reasonable window or just "past")
                                 if (nowTimestamp >= triggerTime) {
                                     const dateStr = `${String(nextDueDateMidnight.getDate()).padStart(2,'0')}/${String(nextDueDateMidnight.getMonth()+1).padStart(2,'0')}`;
                                     const message = `Your EMI of ₹${emi.amount.toLocaleString()} for ${vehicle.make} ${vehicle.model} is due tomorrow (${dateStr}).`;
-                                    
-                                    // 1. Visual Notification
                                     if (Notification.permission === 'granted') {
-                                        try {
-                                            new Notification('EMI Reminder', { body: message, tag: emi.id });
-                                        } catch (e) {
-                                            console.error("Failed to send notification", e);
-                                        }
+                                        try { new Notification('EMI Reminder', { body: message, tag: emi.id }); } catch (e) {}
                                     }
-
-                                    // 2. Audio Ringtone
                                     try {
                                         const soundType = settings.soundPreference || 'subtle';
                                         const audioUrl = SOUND_URLS[soundType as keyof typeof SOUND_URLS];
-                                        if (audioUrl) {
-                                            const audio = new Audio(audioUrl);
-                                            audio.play().catch(e => console.log('Audio autoplay blocked or failed', e));
-                                        }
-                                    } catch (e) {
-                                        console.error('Failed to play alarm sound', e);
-                                    }
-                                    
-                                    currentAlarmConfig = {
-                                        ...currentAlarmConfig,
-                                        hasRung: true,
-                                        history: [...currentAlarmConfig.history, {
-                                            timestamp: new Date().toISOString(),
-                                            action: 'ring' as const
-                                        }]
-                                    };
+                                        if (audioUrl) { new Audio(audioUrl).play().catch(() => {}); }
+                                    } catch (e) {}
+                                    currentAlarmConfig = { ...currentAlarmConfig, hasRung: true, history: [...currentAlarmConfig.history, { timestamp: new Date().toISOString(), action: 'ring' as const }] };
                                     configChanged = true;
                                 }
                             }
-                            
-                            if (configChanged) {
-                                vehicleChanged = true;
-                                return { ...emi, alarmConfig: currentAlarmConfig };
-                            }
+                            if (configChanged) { vehicleChanged = true; return { ...emi, alarmConfig: currentAlarmConfig }; }
                         }
                         return emi;
                     });
-                    
-                    if (vehicleChanged) {
-                        hasChanges = true;
-                        return { ...vehicle, emis: newEmis };
-                    }
+                    if (vehicleChanged) { hasChanges = true; return { ...vehicle, emis: newEmis }; }
                     return vehicle;
                 });
-
-                // Only return new state if changes occurred to prevent re-renders
                 return hasChanges ? newVehicles : prevVehicles;
             });
         };
-
-        // Run immediately on mount then interval
         checkAlarms();
-        const alarmInterval = setInterval(checkAlarms, 60000); // Check every minute
-
+        const alarmInterval = setInterval(checkAlarms, 60000);
         return () => clearInterval(alarmInterval);
-    }, [settings.reminderTime, settings.soundPreference, setVehicles]); // Only run effect when reminder time settings change or setVehicles reference changes
+    }, [settings.reminderTime, settings.soundPreference, setVehicles]);
 
     const handleSnoozeAlarm = (emiId: string, vehicleId: string) => {
         updateVehicle(vehicleId, v => {
@@ -1594,38 +1530,11 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
                 if (emi.id === emiId && emi.alarmConfig) {
                     const now = new Date();
                     const newCount = emi.alarmConfig.snoozeCount + 1;
-                    let newTrigger = new Date(); // Default basis is "Now"
-
-                    if (newCount === 1) {
-                        // First snooze: +2 hours
-                        newTrigger.setHours(now.getHours() + 2);
-                    } else if (newCount === 2) {
-                        // Second snooze: 5:00 PM
-                        newTrigger.setHours(17, 0, 0, 0);
-                        // If it's already past 5 PM, add 2 hours fallback
-                        if (newTrigger.getTime() <= now.getTime()) {
-                             newTrigger = new Date();
-                             newTrigger.setHours(now.getHours() + 2);
-                        }
-                    } else {
-                        // Subsequent snoozes: +2 hours
-                        newTrigger.setHours(now.getHours() + 2);
-                    }
-
-                    return {
-                        ...emi,
-                        alarmConfig: {
-                            ...emi.alarmConfig!,
-                            snoozeCount: newCount,
-                            nextTrigger: newTrigger.toISOString(),
-                            hasRung: false,
-                            history: [...emi.alarmConfig!.history, {
-                                timestamp: new Date().toISOString(),
-                                action: 'snooze' as const,
-                                details: `Rescheduled to ${newTrigger.toLocaleTimeString()}`
-                            }]
-                        }
-                    };
+                    let newTrigger = new Date();
+                    if (newCount === 1) { newTrigger.setHours(now.getHours() + 2); } 
+                    else if (newCount === 2) { newTrigger.setHours(17, 0, 0, 0); if (newTrigger.getTime() <= now.getTime()) { newTrigger = new Date(); newTrigger.setHours(now.getHours() + 2); } } 
+                    else { newTrigger.setHours(now.getHours() + 2); }
+                    return { ...emi, alarmConfig: { ...emi.alarmConfig!, snoozeCount: newCount, nextTrigger: newTrigger.toISOString(), hasRung: false, history: [...emi.alarmConfig!.history, { timestamp: new Date().toISOString(), action: 'snooze' as const, details: `Rescheduled to ${newTrigger.toLocaleTimeString()}` }] } };
                 }
                 return emi;
             });
@@ -1640,28 +1549,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
                     const [h, m] = time.split(':').map(Number);
                     const newTrigger = new Date();
                     newTrigger.setHours(h, m, 0, 0);
-                    
-                    return {
-                        ...emi,
-                        alarmConfig: {
-                            ...emi.alarmConfig!,
-                            manualTime: time,
-                            nextTrigger: newTrigger.toISOString(),
-                            hasRung: false, // Reset rung state so it rings at new time
-                            // Note: We do NOT reset snoozeCount per prompt implication, 
-                            // but usually manual set implies a reset of the "snooze flow". 
-                            // However, prompt says "Manual time should not override the default schedule and follow the same snooze rules".
-                            // We'll keep snoozeCount to track behaviour or reset? 
-                            // "Use that manual time instead of default 11am". This implies it's like the initial start.
-                            // Let's reset snoozeCount to treat it as a fresh start for the day.
-                            snoozeCount: 0,
-                            history: [...emi.alarmConfig!.history, {
-                                timestamp: new Date().toISOString(),
-                                action: 'manual_set' as const,
-                                details: `Set to ${time}`
-                            }]
-                        }
-                    };
+                    return { ...emi, alarmConfig: { ...emi.alarmConfig!, manualTime: time, nextTrigger: newTrigger.toISOString(), hasRung: false, snoozeCount: 0, history: [...emi.alarmConfig!.history, { timestamp: new Date().toISOString(), action: 'manual_set' as const, details: `Set to ${time}` }] } };
                 }
                 return emi;
             });
@@ -1673,17 +1561,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
         updateVehicle(vehicleId, v => {
             const updatedEmis = v.emis.map(emi => {
                 if (emi.id === emiId && emi.alarmConfig) {
-                    return {
-                        ...emi,
-                        alarmConfig: {
-                            ...emi.alarmConfig!,
-                            isDismissed: true,
-                            history: [...emi.alarmConfig!.history, {
-                                timestamp: new Date().toISOString(),
-                                action: 'dismiss' as const,
-                            }]
-                        }
-                    };
+                    return { ...emi, alarmConfig: { ...emi.alarmConfig!, isDismissed: true, history: [...emi.alarmConfig!.history, { timestamp: new Date().toISOString(), action: 'dismiss' as const }] } };
                 }
                 return emi;
             });
@@ -1691,54 +1569,25 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
         });
     };
 
-
     const handleSaveVehicle = (vehicleData: Omit<Vehicle, 'id' | 'documents' | 'emis' | 'archivedDocuments'>) => {
         if (editingVehicle) {
              setVehicles(prev => prev.map(v => v.id === editingVehicle.id ? { ...v, ...vehicleData } : v));
              setEditingVehicle(null);
         } else {
-            const newVehicle: Vehicle = {
-                ...vehicleData,
-                id: crypto.randomUUID(),
-                documents: [],
-                emis: [],
-                archivedDocuments: []
-            };
+            const newVehicle: Vehicle = { ...vehicleData, id: crypto.randomUUID(), documents: [], emis: [], archivedDocuments: [] };
             setVehicles(prev => [...prev, newVehicle]);
         }
         setVehicleFormModalOpen(false);
     };
 
-    const handleSelectVehicle = (id: string) => {
-        setSelectedVehicleId(id);
-        setView('vehicleDetail');
-    };
-    
-    const handleViewVehicleFromDashboard = (id: string) => {
-        setSelectedVehicleId(id);
-        setView('vehicleDetail');
-    }
-
-    const updateVehicle = (id: string, updateFn: (vehicle: Vehicle) => Vehicle) => {
-        setVehicles(prev => prev.map(v => v.id === id ? updateFn(v) : v));
-    }
+    const handleSelectVehicle = (id: string) => { setSelectedVehicleId(id); setView('vehicleDetail'); };
+    const handleViewVehicleFromDashboard = (id: string) => { setSelectedVehicleId(id); setView('vehicleDetail'); }
+    const updateVehicle = (id: string, updateFn: (vehicle: Vehicle) => Vehicle) => { setVehicles(prev => prev.map(v => v.id === id ? updateFn(v) : v)); }
 
     const handleSaveEmi = (emiData: Omit<Emi, 'id'>, existingId?: string) => {
         if (!selectedVehicleId) return;
-
-        if (existingId) { // Update existing EMI
-            updateVehicle(selectedVehicleId, v => ({
-                ...v,
-                emis: v.emis.map(e => e.id === existingId ? { ...e, ...emiData } : e)
-            }));
-        } else { // Add new EMI
-            const newEmi: Emi = { 
-                ...emiData, 
-                id: crypto.randomUUID(),
-                paymentHistory: [],
-            };
-            updateVehicle(selectedVehicleId, v => ({...v, emis: [...v.emis, newEmi]}));
-        }
+        if (existingId) { updateVehicle(selectedVehicleId, v => ({ ...v, emis: v.emis.map(e => e.id === existingId ? { ...e, ...emiData } : e) })); } 
+        else { const newEmi: Emi = { ...emiData, id: crypto.randomUUID(), paymentHistory: [] }; updateVehicle(selectedVehicleId, v => ({...v, emis: [...v.emis, newEmi]})); }
     };
     
     const handleMarkEmiPaid = (emiId: string) => {
@@ -1749,27 +1598,11 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
                     let [sY, sM, sD] = emi.startDate.split('-').map(Number);
                     if (sY < 100) sY += 2000;
                     const dueDate = new Date(sY, sM - 1 + emi.paidInstallments, sD);
-                    const today = new Date();
-                    today.setHours(0,0,0,0);
-                    
-                    const dueDateNoTime = new Date(dueDate);
-                    dueDateNoTime.setHours(0,0,0,0);
-                    
+                    const today = new Date(); today.setHours(0,0,0,0);
+                    const dueDateNoTime = new Date(dueDate); dueDateNoTime.setHours(0,0,0,0);
                     const status = today > dueDateNoTime ? 'late' : 'on-time';
-
-                    const newPayment: EmiPayment = {
-                        dueDate: dueDate.toISOString().split('T')[0],
-                        paidDate: today.toISOString().split('T')[0],
-                        status: status,
-                        amount: emi.amount,
-                    };
-                    return { 
-                        ...emi, 
-                        paidInstallments: emi.paidInstallments + 1,
-                        lastPaymentDate: today.toISOString().split('T')[0],
-                        paymentHistory: [...(emi.paymentHistory || []), newPayment],
-                        alarmConfig: undefined // Clear alarm config on payment
-                    };
+                    const newPayment: EmiPayment = { dueDate: dueDate.toISOString().split('T')[0], paidDate: today.toISOString().split('T')[0], status: status, amount: emi.amount };
+                    return { ...emi, paidInstallments: emi.paidInstallments + 1, lastPaymentDate: today.toISOString().split('T')[0], paymentHistory: [...(emi.paymentHistory || []), newPayment], alarmConfig: undefined };
                 }
                 return emi;
             });
@@ -1777,10 +1610,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
         });
     };
 
-    const handleOpenEmiPaidModal = (emi: Emi, vehicleId: string, type: 'overdue' | 'today') => {
-        setSelectedVehicleId(vehicleId); // Ensure correct vehicle is selected for updates
-        setPaymentModalData({ emi, vehicleId, type });
-    };
+    const handleOpenEmiPaidModal = (emi: Emi, vehicleId: string, type: 'overdue' | 'today') => { setSelectedVehicleId(vehicleId); setPaymentModalData({ emi, vehicleId, type }); };
 
     const handleConfirmOverduePayment = (paidDate: string, bounceCharges: number) => {
         if (!paymentModalData) return;
@@ -1791,22 +1621,8 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
                     let [sY, sM, sD] = e.startDate.split('-').map(Number);
                     if (sY < 100) sY += 2000;
                     const dueDate = new Date(sY, sM - 1 + e.paidInstallments, sD);
-                    const newPayment: EmiPayment = {
-                        dueDate: dueDate.toISOString().split('T')[0],
-                        paidDate: paidDate,
-                        status: 'late',
-                        amount: e.amount,
-                        bounceCharges: bounceCharges > 0 ? bounceCharges : undefined,
-                    };
-
-                    return {
-                        ...e,
-                        paidInstallments: e.paidInstallments + 1,
-                        lastPaymentDate: paidDate,
-                        extraCharges: (e.extraCharges || 0) + bounceCharges,
-                        paymentHistory: [...(e.paymentHistory || []), newPayment],
-                        alarmConfig: undefined
-                    };
+                    const newPayment: EmiPayment = { dueDate: dueDate.toISOString().split('T')[0], paidDate: paidDate, status: 'late', amount: e.amount, bounceCharges: bounceCharges > 0 ? bounceCharges : undefined };
+                    return { ...e, paidInstallments: e.paidInstallments + 1, lastPaymentDate: paidDate, extraCharges: (e.extraCharges || 0) + bounceCharges, paymentHistory: [...(e.paymentHistory || []), newPayment], alarmConfig: undefined };
                 }
                 return e;
             });
@@ -1825,20 +1641,8 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
                     let [sY, sM, sD] = e.startDate.split('-').map(Number);
                     if (sY < 100) sY += 2000;
                     const dueDate = new Date(sY, sM - 1 + e.paidInstallments, sD);
-                    const newPayment: EmiPayment = {
-                        dueDate: dueDate.toISOString().split('T')[0],
-                        paidDate: today,
-                        status: 'on-time',
-                        amount: e.amount,
-                    };
-
-                    return { 
-                        ...e, 
-                        paidInstallments: e.paidInstallments + 1, 
-                        lastPaymentDate: today,
-                        paymentHistory: [...(e.paymentHistory || []), newPayment],
-                        alarmConfig: undefined
-                    };
+                    const newPayment: EmiPayment = { dueDate: dueDate.toISOString().split('T')[0], paidDate: today, status: 'on-time', amount: e.amount };
+                    return { ...e, paidInstallments: e.paidInstallments + 1, lastPaymentDate: today, paymentHistory: [...(e.paymentHistory || []), newPayment], alarmConfig: undefined };
                 }
                 return e;
             });
@@ -1847,24 +1651,14 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
         setPaymentModalData(null);
     };
 
-    const handleOpenSettleModal = (emi: Emi) => {
-        if (!selectedVehicleId) return;
-        setSettleModalData({ emi, vehicleId: selectedVehicleId });
-    };
+    const handleOpenSettleModal = (emi: Emi) => { if (!selectedVehicleId) return; setSettleModalData({ emi, vehicleId: selectedVehicleId }); };
 
     const handleConfirmSettleLoan = (settleAmount: number, settleDate: string) => {
         if (!settleModalData) return;
         const { emi, vehicleId } = settleModalData;
         updateVehicle(vehicleId, v => {
             const updatedEmis = v.emis.map(e => {
-                if (e.id === emi.id) {
-                    return {
-                        ...e,
-                        paidInstallments: e.totalTenure,
-                        settlementDetails: { amount: settleAmount, date: settleDate },
-                        alarmConfig: undefined
-                    };
-                }
+                if (e.id === emi.id) { return { ...e, paidInstallments: e.totalTenure, settlementDetails: { amount: settleAmount, date: settleDate }, alarmConfig: undefined }; }
                 return e;
             });
             return { ...v, emis: updatedEmis };
@@ -1874,26 +1668,14 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
 
     const handleAddDoc = (docData: Omit<Document, 'id'>, replacingDocId?: string) => {
         if (!selectedVehicleId) return;
-
         updateVehicle(selectedVehicleId, v => {
             const newDoc = { ...docData, id: crypto.randomUUID() };
             let updatedDocs = [...v.documents];
             let updatedArchivedDocs = [...(v.archivedDocuments || [])];
-            
-            // Find a doc to replace either by the explicit ID (from 'Renew' button)
-            // or by finding an existing doc with the same name.
             const docToArchive = updatedDocs.find(d => d.id === replacingDocId || d.name === newDoc.name);
-            
-            if (docToArchive) {
-                updatedArchivedDocs.push(docToArchive);
-                updatedDocs = updatedDocs.filter(d => d.id !== docToArchive.id);
-            }
-            
+            if (docToArchive) { updatedArchivedDocs.push(docToArchive); updatedDocs = updatedDocs.filter(d => d.id !== docToArchive.id); }
             updatedDocs.push(newDoc);
-            
-            // Sort documents by expiry date
             updatedDocs.sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
-
             return { ...v, documents: updatedDocs, archivedDocuments: updatedArchivedDocs };
         });
     };
@@ -1907,77 +1689,31 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
         });
     };
 
-    const handleDeleteDoc = (vehicleId: string, docId: string) => {
-        updateVehicle(vehicleId, v => ({
-            ...v,
-            documents: v.documents.filter(d => d.id !== docId)
-        }));
-    };
+    const handleDeleteDoc = (vehicleId: string, docId: string) => { updateVehicle(vehicleId, v => ({ ...v, documents: v.documents.filter(d => d.id !== docId) })); };
     
     const handleSnoozeItem = (itemId: string, minutes?: number) => {
         const now = new Date();
         let snoozeUntil;
-
-        if (minutes) {
-             snoozeUntil = new Date(now.getTime() + minutes * 60 * 1000);
-        } else {
-            snoozeUntil = new Date();
-            snoozeUntil.setDate(snoozeUntil.getDate() + 1);
-            snoozeUntil.setHours(8, 0, 0, 0); // Snooze until 8 AM tomorrow by default
-        }
-
-        setSnoozed(prev => ({
-            ...prev,
-            [itemId]: snoozeUntil.getTime()
-        }));
+        if (minutes) { snoozeUntil = new Date(now.getTime() + minutes * 60 * 1000); } 
+        else { snoozeUntil = new Date(); snoozeUntil.setDate(snoozeUntil.getDate() + 1); snoozeUntil.setHours(8, 0, 0, 0); }
+        setSnoozed(prev => ({ ...prev, [itemId]: snoozeUntil.getTime() }));
     };
 
-    const handleEditVehicle = () => {
-        if (selectedVehicleId) {
-            const v = vehicles.find(veh => veh.id === selectedVehicleId);
-            if (v) {
-                setEditingVehicle(v);
-                setVehicleFormModalOpen(true);
-            }
-        }
-    };
-
-    const handleDeleteVehicleClick = () => {
-        if (selectedVehicleId) {
-            const v = vehicles.find(veh => veh.id === selectedVehicleId);
-            if (v) {
-                setVehicleToDelete(v);
-                setDeleteVehicleModalOpen(true);
-            }
-        }
-    };
+    const handleEditVehicle = () => { if (selectedVehicleId) { const v = vehicles.find(veh => veh.id === selectedVehicleId); if (v) { setEditingVehicle(v); setVehicleFormModalOpen(true); } } };
+    const handleDeleteVehicleClick = () => { if (selectedVehicleId) { const v = vehicles.find(veh => veh.id === selectedVehicleId); if (v) { setVehicleToDelete(v); setDeleteVehicleModalOpen(true); } } };
 
     const handleConfirmDeleteVehicle = (reason: string) => {
         if (!vehicleToDelete) return;
-        // Ideally, log the deletion reason somewhere. For now, we just proceed with deletion.
-        console.log(`Deleting vehicle ${vehicleToDelete.id} - Reason: ${reason}`);
-        
         setVehicles(prev => prev.filter(v => v.id !== vehicleToDelete.id));
-        setVehicleToDelete(null);
-        setDeleteVehicleModalOpen(false);
-        setSelectedVehicleId(null);
-        setView('vehicleList');
+        setVehicleToDelete(null); setDeleteVehicleModalOpen(false); setSelectedVehicleId(null); setView('vehicleList');
     };
     
     const handleExportData = () => {
-        const data = {
-            vehicles,
-            snoozed,
-            settings
-        };
+        const data = { vehicles, snoozed, settings };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `due_guardian_backup_${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const link = document.createElement('a'); link.href = url; link.download = `due_guardian_backup_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
     };
 
     const handleImportData = (file: File) => {
@@ -1993,13 +1729,8 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
                         setSettingsOpen(false);
                         alert('Data restored successfully!');
                     }
-                } else {
-                    alert('Invalid backup file.');
-                }
-            } catch (err) {
-                alert('Error parsing backup file.');
-                console.error(err);
-            }
+                } else { alert('Invalid backup file.'); }
+            } catch (err) { alert('Error parsing backup file.'); console.error(err); }
         };
         reader.readAsText(file);
     };
@@ -2008,47 +1739,14 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
 
     const renderContent = () => {
         switch (view) {
-            case 'vehicleList':
-                return <VehicleList 
-                            vehicles={vehicles} 
-                            onSelectVehicle={handleSelectVehicle} 
-                            onAddAssetClick={() => { setAddModalMode('asset'); setVehicleFormModalOpen(true); setEditingVehicle(null); }}
-                            onAddLoanClick={() => { setAddModalMode('loan'); setVehicleFormModalOpen(true); setEditingVehicle(null); }}
-                        />;
+            case 'vehicleList': return <VehicleList vehicles={vehicles} onSelectVehicle={handleSelectVehicle} onAddAssetClick={() => { setAddModalMode('asset'); setVehicleFormModalOpen(true); setEditingVehicle(null); }} onAddLoanClick={() => { setAddModalMode('loan'); setVehicleFormModalOpen(true); setEditingVehicle(null); }} />;
             case 'vehicleDetail':
                 if (selectedVehicle) {
-                    return <VehicleDetail 
-                                vehicle={selectedVehicle} 
-                                onBack={() => setView('vehicleList')}
-                                onAddDoc={handleAddDoc}
-                                onUpdateDoc={handleUpdateDoc}
-                                onDeleteDoc={(doc) => setDocToDelete({ vehicleId: selectedVehicle.id, doc })}
-                                onMarkEmiPaid={handleMarkEmiPaid}
-                                onOpenSettleModal={handleOpenSettleModal}
-                                onEditEmiClick={(emi) => {
-                                    setEditingEmi(emi);
-                                    setEmiModalOpen(true);
-                                }}
-                                onEditVehicle={handleEditVehicle}
-                                onDeleteVehicle={handleDeleteVehicleClick}
-                            />;
+                    return <VehicleDetail vehicle={selectedVehicle} onBack={() => setView('vehicleList')} onAddDoc={handleAddDoc} onUpdateDoc={handleUpdateDoc} onDeleteDoc={(doc) => setDocToDelete({ vehicleId: selectedVehicle.id, doc })} onMarkEmiPaid={handleMarkEmiPaid} onOpenSettleModal={handleOpenSettleModal} onEditEmiClick={(emi) => { setEditingEmi(emi); setEmiModalOpen(true); }} onEditVehicle={handleEditVehicle} onDeleteVehicle={handleDeleteVehicleClick} />;
                 }
-                setView('vehicleList'); // Fallback if vehicle not found
-                return null;
-            case 'reports':
-                return <Reports vehicles={vehicles} />;
-            case 'dashboard':
-            default:
-                return <Dashboard 
-                            vehicles={vehicles} 
-                            onViewVehicle={handleViewVehicleFromDashboard}
-                            snoozed={snoozed}
-                            onSnoozeItem={handleSnoozeItem}
-                            onMarkEmiPaid={handleOpenEmiPaidModal}
-                            onSnoozeAlarm={handleSnoozeAlarm}
-                            onSetManualAlarm={handleSetManualAlarm}
-                            onDismissAlarm={handleDismissAlarm}
-                        />;
+                setView('vehicleList'); return null;
+            case 'reports': return <Reports vehicles={vehicles} />;
+            case 'dashboard': default: return <Dashboard vehicles={vehicles} onViewVehicle={handleViewVehicleFromDashboard} snoozed={snoozed} onSnoozeItem={handleSnoozeItem} onMarkEmiPaid={handleOpenEmiPaidModal} onSnoozeAlarm={handleSnoozeAlarm} onSetManualAlarm={handleSetManualAlarm} onDismissAlarm={handleDismissAlarm} />;
         }
     };
     
@@ -2068,7 +1766,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
                         <h1 className="text-xl font-bold text-white">Due Guardian</h1>
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className="text-sm text-slate-400 hidden sm:inline">{currentUser}</span>
+                        {isSyncing ? <span className="text-xs text-green-400 animate-pulse">Syncing...</span> : <span className="text-xs text-slate-500">Synced</span>}
                         <button onClick={() => setSettingsOpen(true)} className="p-2 text-slate-400 hover:text-white rounded-full hover:bg-slate-700 transition-colors" title="Settings">
                             <SettingsIcon className="w-6 h-6" />
                         </button>
@@ -2100,139 +1798,50 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, onLogo
             </nav>
 
             <VehicleFormModal isOpen={isVehicleFormModalOpen} onClose={() => { setVehicleFormModalOpen(false); setEditingVehicle(null); }} onSave={handleSaveVehicle} mode={addModalMode} initialData={editingVehicle} />
-            
-            {selectedVehicleId && (
-                <EmiFormModal 
-                    isOpen={isEmiModalOpen} 
-                    onClose={() => { setEmiModalOpen(false); setEditingEmi(null); }} 
-                    onSubmit={handleSaveEmi}
-                    initialData={editingEmi}
-                    vehicleType={selectedVehicle?.type}
-                />
-            )}
-
-            {isDeleteVehicleModalOpen && vehicleToDelete && (
-                <DeleteVehicleModal
-                    isOpen={isDeleteVehicleModalOpen}
-                    onClose={() => { setDeleteVehicleModalOpen(false); setVehicleToDelete(null); }}
-                    onConfirm={handleConfirmDeleteVehicle}
-                    vehicleName={`${vehicleToDelete.make} ${vehicleToDelete.model}`}
-                />
-            )}
-
-            <SettingsModal 
-                isOpen={isSettingsOpen}
-                onClose={() => setSettingsOpen(false)}
-                reminderTime={settings.reminderTime}
-                soundPreference={settings.soundPreference || 'subtle'}
-                onTimeChange={(time) => setSettings({ ...settings, reminderTime: time })}
-                onSoundChange={(sound) => setSettings({ ...settings, soundPreference: sound })}
-                onLogout={onLogout}
-                onExport={handleExportData}
-                onImport={handleImportData}
-            />
-            
-            {!isRunningStandalone && installPrompt && (
-                <div className="fixed bottom-20 right-4 z-50">
-                    <button onClick={() => installPrompt.prompt()} className="bg-indigo-600 text-white font-bold py-2 px-4 rounded-full shadow-lg flex items-center space-x-2 animate-pulse">
-                        <DownloadIcon className="w-5 h-5" />
-                        <span>Install App</span>
-                    </button>
-                </div>
-            )}
-            
+            {selectedVehicleId && <EmiFormModal isOpen={isEmiModalOpen} onClose={() => { setEmiModalOpen(false); setEditingEmi(null); }} onSubmit={handleSaveEmi} initialData={editingEmi} vehicleType={selectedVehicle?.type} />}
+            {isDeleteVehicleModalOpen && vehicleToDelete && <DeleteVehicleModal isOpen={isDeleteVehicleModalOpen} onClose={() => { setDeleteVehicleModalOpen(false); setVehicleToDelete(null); }} onConfirm={handleConfirmDeleteVehicle} vehicleName={`${vehicleToDelete.make} ${vehicleToDelete.model}`} />}
+            <SettingsModal isOpen={isSettingsOpen} onClose={() => setSettingsOpen(false)} reminderTime={settings.reminderTime} soundPreference={settings.soundPreference || 'subtle'} onTimeChange={(time) => setSettings({ ...settings, reminderTime: time })} onSoundChange={(sound) => setSettings({ ...settings, soundPreference: sound })} onLogout={onLogout} onExport={handleExportData} onImport={handleImportData} />
+            {!isRunningStandalone && installPrompt && <div className="fixed bottom-20 right-4 z-50"><button onClick={() => installPrompt.prompt()} className="bg-indigo-600 text-white font-bold py-2 px-4 rounded-full shadow-lg flex items-center space-x-2 animate-pulse"><DownloadIcon className="w-5 h-5" /><span>Install App</span></button></div>}
             <AddToHomeScreenPrompt />
-
             <ManualInstallModal isOpen={isManualInstallModalOpen} onClose={() => setManualInstallModalOpen(false)} />
-
-            <OverduePaymentModal 
-                isOpen={paymentModalData?.type === 'overdue'}
-                onClose={() => setPaymentModalData(null)}
-                onSubmit={handleConfirmOverduePayment}
-            />
-
-            <TodayPaymentConfirmationModal 
-                isOpen={paymentModalData?.type === 'today'}
-                onClose={() => setPaymentModalData(null)}
-                onConfirm={handleConfirmTodayPayment}
-            />
-
-            {settleModalData && <SettleLoanModal 
-                isOpen={!!settleModalData}
-                onClose={() => setSettleModalData(null)}
-                onSubmit={handleConfirmSettleLoan}
-            />}
-
-            <ConfirmationModal
-                isOpen={!!docToDelete}
-                onClose={() => setDocToDelete(null)}
-                onConfirm={() => {
-                    if (docToDelete) {
-                        handleDeleteDoc(docToDelete.vehicleId, docToDelete.doc.id);
-                        setDocToDelete(null);
-                    }
-                }}
-                title="Delete Document"
-            >
-                Are you sure you want to permanently delete "{docToDelete?.doc.name}"? This action cannot be undone.
-            </ConfirmationModal>
+            <OverduePaymentModal isOpen={paymentModalData?.type === 'overdue'} onClose={() => setPaymentModalData(null)} onSubmit={handleConfirmOverduePayment} />
+            <TodayPaymentConfirmationModal isOpen={paymentModalData?.type === 'today'} onClose={() => setPaymentModalData(null)} onConfirm={handleConfirmTodayPayment} />
+            {settleModalData && <SettleLoanModal isOpen={!!settleModalData} onClose={() => setSettleModalData(null)} onSubmit={handleConfirmSettleLoan} />}
+            <ConfirmationModal isOpen={!!docToDelete} onClose={() => setDocToDelete(null)} onConfirm={() => { if (docToDelete) { handleDeleteDoc(docToDelete.vehicleId, docToDelete.doc.id); setDocToDelete(null); } }} title="Delete Document">Are you sure you want to permanently delete "{docToDelete?.doc.name}"? This action cannot be undone.</ConfirmationModal>
         </div>
     );
 };
 
 const App: React.FC = () => {
-    // --- TEMPORARY: BYPASS LOGIN ---
-    /* 
-       We are temporarily bypassing the login screen for testing.
-       To enable login again, comment out the bypass block below and uncomment the saved login logic block.
-    */
-    /*
-    // Bypass Block
-    const currentUser = 'User';
-    const handleLogout = () => {
-        alert("Login is currently disabled for this demo.");
-    };
-    return (
-        <AuthenticatedApp 
-            key={currentUser} 
-            currentUser={currentUser} 
-            onLogout={handleLogout} 
-        />
-    );
-    */
-
-    // --- SAVED LOGIN LOGIC (Restored) ---
-    const [currentUser, setCurrentUser] = useState<string | null>(null);
+    const [session, setSession] = useState<any>(null);
 
     useEffect(() => {
-        const savedUser = localStorage.getItem('active_session_user');
-        if (savedUser) {
-            setCurrentUser(savedUser);
+        if (supabase) {
+            supabase.auth.getSession().then(({ data: { session } }) => {
+                setSession(session);
+            });
+
+            const {
+                data: { subscription },
+            } = supabase.auth.onAuthStateChange((_event, session) => {
+                setSession(session);
+            });
+
+            return () => subscription.unsubscribe();
         }
     }, []);
 
-    const handleLogin = (user: string) => {
-        setCurrentUser(user);
-        localStorage.setItem('active_session_user', user);
-    };
-
-    const handleLogout = () => {
-        setCurrentUser(null);
-        localStorage.removeItem('active_session_user');
-    };
-
-    if (!currentUser) {
-        return <Login onLogin={handleLogin} />;
+    // If session exists, show app. Otherwise show Auth (Login/Signup).
+    if (!session) {
+        return <AuthScreen onLogin={() => {}} />;
     }
-    // ------------------------------------------------
 
-    // We use `key={currentUser}` to force a full remount of AuthenticatedApp when the user changes.
-    // This ensures that the `useLocalStorage` hooks inside it re-initialize with the new user's key prefix.
     return (
         <AuthenticatedApp 
-            key={currentUser} 
-            currentUser={currentUser} 
-            onLogout={handleLogout} 
+            key={session.user.id} 
+            currentUser={session.user.email || 'user'} 
+            userId={session.user.id}
+            onLogout={() => supabase?.auth.signOut()} 
         />
     );
 };

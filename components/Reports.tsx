@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Vehicle, VehicleType, PREDEFINED_DOC_NAMES } from '../types';
 import { DownloadIcon, EmiIcon, DocumentIcon, ArrowLeftIcon } from './icons';
