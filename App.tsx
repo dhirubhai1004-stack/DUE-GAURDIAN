@@ -74,6 +74,52 @@ const getVehicleDisplayName = (vehicle: Vehicle) => {
     return `${vehicle.type} - ${vehicle.make} ${vehicle.model}`;
 };
 
+// --- Helper: Image Compression ---
+const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target?.result as string;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                // Max dimensions 1024x1024 to save space
+                const MAX_DIM = 1024; 
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > MAX_DIM) {
+                        height *= MAX_DIM / width;
+                        width = MAX_DIM;
+                    }
+                } else {
+                    if (height > MAX_DIM) {
+                        width *= MAX_DIM / height;
+                        height = MAX_DIM;
+                    }
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    resolve(event.target?.result as string); // Fallback to original if canvas fails
+                    return;
+                }
+                ctx.drawImage(img, 0, 0, width, height);
+                // Compress to JPEG at 60% quality
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                resolve(dataUrl);
+            };
+            img.onerror = (err) => reject(err);
+        };
+        reader.onerror = (err) => reject(err);
+    });
+};
+
+
 type View = 'dashboard' | 'vehicleList' | 'vehicleDetail' | 'reports';
 
 // Helper components defined outside App to prevent re-renders
@@ -470,6 +516,7 @@ const AddDocModal: React.FC<{
     const [fileName, setFileName] = useState<string | undefined>();
     const [docNameError, setDocNameError] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [isProcessing, setIsProcessing] = useState(false);
 
     const isLoan = [VehicleType.PersonalLoan, VehicleType.BusinessLoan, VehicleType.Overdraft, VehicleType.HomeLoan].includes(vehicleType as VehicleType);
 
@@ -523,6 +570,7 @@ const AddDocModal: React.FC<{
         setFileName(undefined);
         setDocNameError(null);
         setError(null);
+        setIsProcessing(false);
     };
 
     useEffect(() => {
@@ -555,15 +603,38 @@ const AddDocModal: React.FC<{
         }
     }, [isOpen, initialData, isEditing, availableDocNames]);
 
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
-            const reader = new FileReader();
-            reader.onload = (loadEvent) => {
-                setFileData(loadEvent.target?.result as string);
-                setFileName(file.name);
-            };
-            reader.readAsDataURL(file);
+            setIsProcessing(true);
+            setFileName(file.name);
+            
+            try {
+                if (file.type.startsWith('image/')) {
+                    // Compress image before saving
+                    const compressedData = await compressImage(file);
+                    setFileData(compressedData);
+                } else {
+                    // Check file size for non-images
+                    if (file.size > 2 * 1024 * 1024) { // 2MB limit for raw files
+                        alert("File is too large! Please upload a file smaller than 2MB.");
+                        setFileName(undefined);
+                        setFileData(undefined);
+                    } else {
+                        // Read other files as raw base64
+                        const reader = new FileReader();
+                        reader.onload = (e) => setFileData(e.target?.result as string);
+                        reader.readAsDataURL(file);
+                    }
+                }
+            } catch (err) {
+                console.error("File processing error", err);
+                alert("Could not process this file.");
+                setFileName(undefined);
+                setFileData(undefined);
+            } finally {
+                setIsProcessing(false);
+            }
         }
     };
     
@@ -608,10 +679,11 @@ const AddDocModal: React.FC<{
 
                 <div>
                     <label className="block text-sm font-medium text-slate-400 mb-1">Upload Document (Optional)</label>
-                    <input type="file" onChange={handleFileChange} className="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-600" />
-                    {fileName && <p className="text-xs text-green-400 mt-1">File selected: {fileName}</p>}
+                    <input type="file" onChange={handleFileChange} accept="image/*,.pdf" className="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-600" />
+                    {isProcessing && <p className="text-xs text-yellow-400 mt-1">Compressing file...</p>}
+                    {!isProcessing && fileName && <p className="text-xs text-green-400 mt-1">File selected: {fileName}</p>}
                 </div>
-                <button type="submit" disabled={!!docNameError} className="w-full bg-indigo-600 hover:bg-indigo-700 p-2 rounded text-white font-bold disabled:bg-slate-600 disabled:cursor-not-allowed">
+                <button type="submit" disabled={!!docNameError || isProcessing} className="w-full bg-indigo-600 hover:bg-indigo-700 p-2 rounded text-white font-bold disabled:bg-slate-600 disabled:cursor-not-allowed">
                     {isEditing ? 'Save Changes' : 'Add Document'}
                 </button>
             </form>
