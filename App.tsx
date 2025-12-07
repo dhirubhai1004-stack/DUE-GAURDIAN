@@ -84,8 +84,9 @@ const compressImage = (file: File): Promise<string> => {
             img.src = event.target?.result as string;
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                // Max dimensions 1024x1024 to save space
-                const MAX_DIM = 1024; 
+                // Aggressively resize to max 800px to save LocalStorage space
+                // This ensures files are usually < 100KB
+                const MAX_DIM = 800; 
                 let width = img.width;
                 let height = img.height;
 
@@ -109,8 +110,8 @@ const compressImage = (file: File): Promise<string> => {
                     return;
                 }
                 ctx.drawImage(img, 0, 0, width, height);
-                // Compress to JPEG at 60% quality
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                // Compress to JPEG at 50% quality for maximum space saving
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
                 resolve(dataUrl);
             };
             img.onerror = (err) => reject(err);
@@ -680,7 +681,7 @@ const AddDocModal: React.FC<{
                 <div>
                     <label className="block text-sm font-medium text-slate-400 mb-1">Upload Document (Optional)</label>
                     <input type="file" onChange={handleFileChange} accept="image/*,.pdf" className="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-600" />
-                    {isProcessing && <p className="text-xs text-yellow-400 mt-1">Compressing file...</p>}
+                    {isProcessing && <p className="text-xs text-yellow-400 mt-1">Compressing file to save space...</p>}
                     {!isProcessing && fileName && <p className="text-xs text-green-400 mt-1">File selected: {fileName}</p>}
                 </div>
                 <button type="submit" disabled={!!docNameError || isProcessing} className="w-full bg-indigo-600 hover:bg-indigo-700 p-2 rounded text-white font-bold disabled:bg-slate-600 disabled:cursor-not-allowed">
@@ -756,6 +757,7 @@ const VehicleDetail: React.FC<{
     const [isDocModalOpen, setDocModalOpen] = useState(false);
     const [docToReplace, setDocToReplace] = useState<Document | null>(null);
     const [docToEdit, setDocToEdit] = useState<Document | null>(null);
+    const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
 
     const activeEmis = vehicle.emis.filter(e => e.paidInstallments < e.totalTenure);
     const completedEmis = vehicle.emis.filter(e => e.paidInstallments >= e.totalTenure);
@@ -949,9 +951,14 @@ const VehicleDetail: React.FC<{
                                 <div className="flex items-center space-x-2">
                                     {(isExpired || isExpiringSoon) && <button onClick={() => handleRenewClick(doc)} className="text-sm bg-amber-600 hover:bg-amber-700 text-white font-semibold py-1 px-3 rounded-full">Renew</button>}
                                     {doc.fileData && (
-                                        <a href={doc.fileData} download={doc.fileName} className="text-indigo-400 hover:text-indigo-300 p-2" title="Download">
-                                            <DownloadIcon className="w-5 h-5" />
-                                        </a>
+                                        <>
+                                            <button onClick={() => setPreviewDoc(doc)} className="text-indigo-400 hover:text-indigo-300 p-2" title="Preview">
+                                                <EyeIcon className="w-5 h-5" />
+                                            </button>
+                                            <a href={doc.fileData} download={doc.fileName} className="text-emerald-400 hover:text-emerald-300 p-2" title="Download">
+                                                <DownloadIcon className="w-5 h-5" />
+                                            </a>
+                                        </>
                                     )}
                                      <button onClick={() => handleEditClick(doc)} className="text-slate-400 hover:text-white p-2" title="Edit">
                                         <EditIcon className="w-5 h-5" />
@@ -1011,6 +1018,24 @@ const VehicleDetail: React.FC<{
                 activeDocuments={vehicle.documents}
                 vehicleType={vehicle.type}
             />
+
+            {previewDoc && (
+                <Modal isOpen={!!previewDoc} onClose={() => setPreviewDoc(null)} title={previewDoc.name}>
+                    <div className="flex justify-center bg-slate-900 rounded-lg overflow-hidden">
+                        {previewDoc.fileData?.startsWith('data:application/pdf') ? (
+                            <iframe src={previewDoc.fileData} className="w-full h-[60vh] border-0" title="PDF Preview"></iframe>
+                        ) : (
+                            <img src={previewDoc.fileData} alt={previewDoc.name} className="max-w-full max-h-[70vh] object-contain" />
+                        )}
+                    </div>
+                    <div className="mt-4 flex justify-end gap-2">
+                         <a href={previewDoc.fileData} download={previewDoc.fileName} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded flex items-center gap-2">
+                             <DownloadIcon className="w-4 h-4" /> Download
+                         </a>
+                        <button onClick={() => setPreviewDoc(null)} className="bg-slate-600 hover:bg-slate-700 px-4 py-2 rounded text-white font-bold">Close</button>
+                    </div>
+                </Modal>
+            )}
         </div>
     );
 };
