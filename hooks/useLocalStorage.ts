@@ -18,15 +18,11 @@ function useLocalStorage<T,>(key: string, initialValue: T): [T, React.Dispatch<R
       const valueToStore = JSON.stringify(storedValue);
       window.localStorage.setItem(key, valueToStore);
     } catch (error: any) {
-      console.error("LocalStorage Save Error:", error);
-      // Check for storage quota exceeded errors
-      if (error && (
-          error.name === 'QuotaExceededError' || 
-          error.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
-          (error.message && error.message.includes('quota'))
-      )) {
-          alert("⚠️ Storage Full! \n\nThe item you just added could not be saved because your local storage is full. \n\nPlease try:\n1. Deleting old documents or unused vehicles.\n2. Re-uploading smaller/compressed images.\n3. Using 'Backup' in Settings to save your data externally.");
-      }
+      // We suppress the alert here. 
+      // Rationale: We are syncing to Supabase. If LocalStorage is full, 
+      // we don't want to block the user. The app will continue to work in memory
+      // and the background sync will save the data to the Cloud Database.
+      console.warn("LocalStorage Quota Exceeded. Data will persist in Cloud/Memory only.", error);
     }
   }, [key, storedValue]);
 

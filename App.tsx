@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import useLocalStorage from './hooks/useLocalStorage';
 import { Vehicle, VehicleType, Emi, Document, PREDEFINED_DOC_NAMES, EmiPayment, AlarmLog, MACHINE_TYPES } from './types';
@@ -660,9 +661,10 @@ const AddDocModal: React.FC<{
 
                 <div>
                     <label className="block text-sm font-medium text-slate-400 mb-1">Upload Document (Optional)</label>
-                    <input type="file" onChange={handleFileChange} accept="image/*,.pdf" className="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-600" />
-                    {isProcessing && <p className="text-xs text-yellow-400 mt-1">Compressing file to save space...</p>}
+                    <input type="file" onChange={handleFileChange} accept=".pdf,image/*" className="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-600" />
+                    {isProcessing && <p className="text-xs text-yellow-400 mt-1">Processing file...</p>}
                     {!isProcessing && fileName && <p className="text-xs text-green-400 mt-1">File selected: {fileName}</p>}
+                    <p className="text-xs text-slate-500 mt-1">Supports Images (JPG, PNG) and PDF. Max 2MB.</p>
                 </div>
                 <button type="submit" disabled={!!docNameError || isProcessing} className="w-full bg-indigo-600 hover:bg-indigo-700 p-2 rounded text-white font-bold disabled:bg-slate-600 disabled:cursor-not-allowed">
                     {isEditing ? 'Save Changes' : 'Add Document'}
@@ -986,11 +988,20 @@ const VehicleDetail: React.FC<{
 
             {previewDoc && (
                 <Modal isOpen={!!previewDoc} onClose={() => setPreviewDoc(null)} title={previewDoc.name}>
-                    <div className="flex justify-center bg-slate-900 rounded-lg overflow-hidden">
-                        {previewDoc.fileData?.startsWith('data:application/pdf') ? (
-                            <iframe src={previewDoc.fileData} className="w-full h-[60vh] border-0" title="PDF Preview"></iframe>
+                    <div className="flex justify-center bg-slate-900 rounded-lg overflow-hidden relative">
+                         {/* Enhanced Preview Logic */}
+                        {(previewDoc.fileData?.includes('pdf') || previewDoc.fileName?.toLowerCase().endsWith('.pdf')) ? (
+                            <iframe 
+                                src={previewDoc.fileData} 
+                                className="w-[85vw] h-[75vh] md:w-[600px] md:h-[600px] border-0 bg-white" 
+                                title="PDF Preview"
+                            ></iframe>
                         ) : (
-                            <img src={previewDoc.fileData} alt={previewDoc.name} className="max-w-full max-h-[70vh] object-contain" />
+                            <img 
+                                src={previewDoc.fileData} 
+                                alt={previewDoc.name} 
+                                className="max-w-full max-h-[80vh] object-contain" 
+                            />
                         )}
                     </div>
                     <div className="mt-4 flex justify-end gap-2">
@@ -1355,6 +1366,10 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, userId
     const [snoozed, setSnoozed] = useLocalStorage<Record<string, number>>(`${currentUser}_snoozedReminders`, {});
     const [settings, setSettings] = useLocalStorage<{ reminderTime: string, soundPreference?: string }>(`${currentUser}_settings`, { reminderTime: '11:00', soundPreference: 'subtle' });
     
+    // Derived username from email (e.g., 'john' from 'john@example.com')
+    const username = currentUser.split('@')[0];
+    const displayUsername = username.charAt(0).toUpperCase() + username.slice(1);
+
     // --- Sync State Logic ---
     const [isSyncing, setIsSyncing] = useState(false);
     const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1766,7 +1781,11 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, userId
                         <h1 className="text-xl font-bold text-white">Due Guardian</h1>
                     </div>
                     <div className="flex items-center gap-2">
-                        {isSyncing ? <span className="text-xs text-green-400 animate-pulse">Syncing...</span> : <span className="text-xs text-slate-500">Synced</span>}
+                        {isSyncing ? (
+                            <span className="text-xs text-green-400 animate-pulse">Syncing...</span>
+                        ) : (
+                            <span className="text-xs text-slate-400 font-medium">{displayUsername}</span>
+                        )}
                         <button onClick={() => setSettingsOpen(true)} className="p-2 text-slate-400 hover:text-white rounded-full hover:bg-slate-700 transition-colors" title="Settings">
                             <SettingsIcon className="w-6 h-6" />
                         </button>
