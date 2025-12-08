@@ -1150,6 +1150,58 @@ const ConfirmationModal: React.FC<{
     );
 };
 
+const ResetPasswordModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+}> = ({ isOpen, onClose }) => {
+    const [password, setPassword] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState('');
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            if (!supabase) throw new Error("Supabase client not initialized");
+            const { error } = await supabase.auth.updateUser({ password });
+            if (error) throw error;
+            setMessage('Password updated successfully! You can now use the app.');
+            setTimeout(() => {
+                onClose();
+            }, 2000);
+        } catch (err: any) {
+            setMessage(err.message || 'Error updating password');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <Modal isOpen={isOpen} onClose={() => {}} title="Set New Password">
+            <form onSubmit={handleSubmit} className="space-y-4">
+                {message && <div className={`p-2 rounded text-sm ${message.includes('success') ? 'bg-green-900/50 text-green-200' : 'bg-red-900/50 text-red-200'}`}>{message}</div>}
+                <div>
+                    <label className="block text-sm text-slate-400 mb-1">New Password</label>
+                    <input 
+                        type="password" 
+                        value={password} 
+                        onChange={e => setPassword(e.target.value)} 
+                        className="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white" 
+                        required 
+                        minLength={6} 
+                        placeholder="Enter new password"
+                    />
+                </div>
+                <button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 p-2 rounded text-white font-bold disabled:bg-slate-600">
+                    {loading ? 'Updating...' : 'Update Password'}
+                </button>
+            </form>
+        </Modal>
+    );
+};
+
 const SettingsModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
@@ -1277,12 +1329,15 @@ const SettingsModal: React.FC<{
 
 // --- Auth Components ---
 
+type AuthMode = 'login' | 'signup' | 'forgot_password';
+
 const AuthScreen: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1291,25 +1346,68 @@ const AuthScreen: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
         return;
     }
     setError('');
+    setSuccessMessage('');
     setLoading(true);
 
     try {
-        if (isSignUp) {
-            const { error } = await supabase.auth.signUp({ email, password });
+        if (authMode === 'forgot_password') {
+             const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                 redirectTo: window.location.href, // Redirects back to app to handle reset
+             });
+             if (error) throw error;
+             setSuccessMessage("Password reset link sent! Check your email (and spam folder) to reset your password.");
+        } else if (authMode === 'signup') {
+            const { data, error } = await supabase.auth.signUp({ email, password });
             if (error) throw error;
-            alert("Registration successful! Please login.");
-            setIsSignUp(false);
+            
+            // 1. Check if Supabase logged us in directly (happens if 'Confirm Email' is OFF)
+            if (data.session) {
+                return; // Auto-login will be handled by the session state listener
+            }
+
+            // 2. If no session, it means 'Confirm Email' is ON.
+            // We try to Force Login just in case (sometimes helps update state, or fails fast)
+            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+            
+            if (signInData.session) {
+                return;
+            }
+
+            // 3. If login failed specifically because of email not confirmed, tell the user to fix their config.
+            if (signInError && signInError.message.includes("Email not confirmed")) {
+                 setError("Account created! To login immediately without verification, please disable 'Confirm Email' in your Supabase Authentication settings.");
+            } else {
+                 // Fallback for other issues
+                 setSuccessMessage("Account created. Please try logging in.");
+                 setAuthMode('login'); 
+            }
+
         } else {
             const { error } = await supabase.auth.signInWithPassword({ email, password });
             if (error) throw error;
-            onLogin();
+            // Login successful
         }
     } catch (err: any) {
-        setError(err.message);
+        const msg = err.message || "";
+        if (msg.includes("Invalid login credentials")) {
+            setError("Incorrect email or password. If you haven't created an account, please Sign Up first.");
+        } else if (msg.includes("Email not confirmed")) {
+            setError("Please confirm your email address. Check your inbox (and spam folder) for the verification link.");
+        } else if (msg.toLowerCase().includes("security purposes") || msg.toLowerCase().includes("wait")) {
+            setError("Too many attempts. Please wait a few seconds before trying again.");
+        } else {
+            setError(msg);
+        }
     } finally {
         setLoading(false);
     }
   };
+
+  const toggleMode = (mode: AuthMode) => {
+      setAuthMode(mode);
+      setError('');
+      setSuccessMessage('');
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -1319,36 +1417,59 @@ const AuthScreen: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
                 <rect width="512" height="512" rx="96" fill="#1E293B" fillOpacity="0"/>
                 <path d="M256 74.6667L96 154.667V256C96 364.533 165.76 430.4 256 448C346.24 430.4 416 364.533 416 256V154.667L256 74.6667Z" stroke="currentColor" strokeWidth="24" strokeLinecap="round" strokeLinejoin="round"/>
                 <rect x="181" y="200" width="150" height="120" rx="10" stroke="white" strokeWidth="16"/>
-                <path d="M181 240H331" stroke="white" stroke-width="16" strokeLinecap="round"/>
-                <path d="M221 180V220" stroke="white" stroke-width="16" strokeLinecap="round"/>
-                <path d="M291 180V220" stroke="white" stroke-width="16" strokeLinecap="round"/>
+                <path d="M181 240H331" stroke="white" strokeWidth="16" strokeLinecap="round"/>
+                <path d="M221 180V220" stroke="white" strokeWidth="16" strokeLinecap="round"/>
+                <path d="M291 180V220" stroke="white" strokeWidth="16" strokeLinecap="round"/>
             </svg>
             <h1 className="text-3xl font-bold text-white">Due Guardian</h1>
           </div>
           <h2 className="text-xl font-bold text-indigo-400 mb-2 text-center">
-            {isSignUp ? 'Create Account' : 'Welcome Back'}
+            {authMode === 'login' ? 'Welcome Back' : (authMode === 'signup' ? 'Create Account' : 'Reset Password')}
           </h2>
           
           <form onSubmit={handleSubmit} className="space-y-4 mt-6">
              {error && <div className="bg-red-900/50 text-red-200 p-3 rounded text-sm text-center border border-red-500/50">{error}</div>}
+             {successMessage && <div className="bg-green-900/50 text-green-200 p-3 rounded text-sm text-center border border-green-500/50">{successMessage}</div>}
+             
              <div>
                <label className="block text-sm text-slate-400 mb-1">Email</label>
                <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white focus:border-indigo-500 outline-none" required />
              </div>
-             <div>
-               <label className="block text-sm text-slate-400 mb-1">Password</label>
-               <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white focus:border-indigo-500 outline-none" required minLength={6} />
-             </div>
+             
+             {authMode !== 'forgot_password' && (
+                 <div>
+                   <label className="block text-sm text-slate-400 mb-1">Password</label>
+                   <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white focus:border-indigo-500 outline-none" required minLength={6} />
+                 </div>
+             )}
+             
              <button type="submit" disabled={loading || !supabase} className="w-full bg-indigo-600 hover:bg-indigo-700 p-2 rounded text-white font-bold mt-4 transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
-               {loading ? 'Processing...' : (isSignUp ? 'Sign Up' : 'Login')}
+               {loading ? 'Processing...' : (authMode === 'login' ? 'Login' : (authMode === 'signup' ? 'Sign Up & Login' : 'Send Reset Link'))}
              </button>
           </form>
-          <p className="text-center text-slate-400 text-sm mt-6">
-            {isSignUp ? 'Already have an account?' : "Don't have an account?"}
-            <button onClick={() => { setIsSignUp(!isSignUp); setError(''); }} className="text-indigo-400 hover:underline ml-1 font-semibold">
-              {isSignUp ? 'Login' : 'Sign Up'}
-            </button>
-          </p>
+
+          <div className="text-center text-slate-400 text-sm mt-6 space-y-2">
+            {authMode === 'login' && (
+                <>
+                    <p>
+                        Don't have an account?
+                        <button onClick={() => toggleMode('signup')} className="text-indigo-400 hover:underline ml-1 font-semibold">Sign Up</button>
+                    </p>
+                    <button onClick={() => toggleMode('forgot_password')} className="text-slate-500 hover:text-slate-300 text-xs mt-2">Forgot Password?</button>
+                </>
+            )}
+            
+            {authMode === 'signup' && (
+                 <p>
+                    Already have an account?
+                    <button onClick={() => toggleMode('login')} className="text-indigo-400 hover:underline ml-1 font-semibold">Login</button>
+                </p>
+            )}
+
+            {authMode === 'forgot_password' && (
+                 <button onClick={() => toggleMode('login')} className="text-indigo-400 hover:underline font-semibold">Back to Login</button>
+            )}
+          </div>
        </div>
     </div>
   );
@@ -1358,9 +1479,11 @@ interface AuthenticatedAppProps {
     currentUser: string; // Used for localStorage key prefix
     userId: string; // Supabase User ID
     onLogout: () => void;
+    isRecoveryMode?: boolean;
+    onResetPasswordSuccess?: () => void;
 }
 
-const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, userId, onLogout }) => {
+const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, userId, onLogout, isRecoveryMode, onResetPasswordSuccess }) => {
     // Key localStorage by currentUser to separate data (Legacy fallback)
     const [vehicles, setVehicles] = useLocalStorage<Vehicle[]>(`${currentUser}_vehicles`, []);
     const [snoozed, setSnoozed] = useLocalStorage<Record<string, number>>(`${currentUser}_snoozedReminders`, {});
@@ -1820,6 +1943,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, userId
             {selectedVehicleId && <EmiFormModal isOpen={isEmiModalOpen} onClose={() => { setEmiModalOpen(false); setEditingEmi(null); }} onSubmit={handleSaveEmi} initialData={editingEmi} vehicleType={selectedVehicle?.type} />}
             {isDeleteVehicleModalOpen && vehicleToDelete && <DeleteVehicleModal isOpen={isDeleteVehicleModalOpen} onClose={() => { setDeleteVehicleModalOpen(false); setVehicleToDelete(null); }} onConfirm={handleConfirmDeleteVehicle} vehicleName={`${vehicleToDelete.make} ${vehicleToDelete.model}`} />}
             <SettingsModal isOpen={isSettingsOpen} onClose={() => setSettingsOpen(false)} reminderTime={settings.reminderTime} soundPreference={settings.soundPreference || 'subtle'} onTimeChange={(time) => setSettings({ ...settings, reminderTime: time })} onSoundChange={(sound) => setSettings({ ...settings, soundPreference: sound })} onLogout={onLogout} onExport={handleExportData} onImport={handleImportData} />
+            <ResetPasswordModal isOpen={!!isRecoveryMode} onClose={() => onResetPasswordSuccess && onResetPasswordSuccess()} />
             {!isRunningStandalone && installPrompt && <div className="fixed bottom-20 right-4 z-50"><button onClick={() => installPrompt.prompt()} className="bg-indigo-600 text-white font-bold py-2 px-4 rounded-full shadow-lg flex items-center space-x-2 animate-pulse"><DownloadIcon className="w-5 h-5" /><span>Install App</span></button></div>}
             <AddToHomeScreenPrompt />
             <ManualInstallModal isOpen={isManualInstallModalOpen} onClose={() => setManualInstallModalOpen(false)} />
@@ -1833,6 +1957,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, userId
 
 const App: React.FC = () => {
     const [session, setSession] = useState<any>(null);
+    const [isRecoveryMode, setIsRecoveryMode] = useState(false);
 
     useEffect(() => {
         if (supabase) {
@@ -1842,7 +1967,10 @@ const App: React.FC = () => {
 
             const {
                 data: { subscription },
-            } = supabase.auth.onAuthStateChange((_event, session) => {
+            } = supabase.auth.onAuthStateChange((event, session) => {
+                if (event === 'PASSWORD_RECOVERY') {
+                    setIsRecoveryMode(true);
+                }
                 setSession(session);
             });
 
@@ -1860,7 +1988,12 @@ const App: React.FC = () => {
             key={session.user.id} 
             currentUser={session.user.email || 'user'} 
             userId={session.user.id}
-            onLogout={() => supabase?.auth.signOut()} 
+            onLogout={() => {
+                setIsRecoveryMode(false);
+                supabase?.auth.signOut();
+            }}
+            isRecoveryMode={isRecoveryMode}
+            onResetPasswordSuccess={() => setIsRecoveryMode(false)}
         />
     );
 };
