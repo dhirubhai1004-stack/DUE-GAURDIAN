@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Vehicle, ReminderItem, ReminderCategory, Emi, Document as DocType, MACHINE_TYPES, VehicleType } from '../types';
 import { CarIcon, TruckIcon, BikeIcon, MachineIcon, DocumentIcon, EmiIcon, SnoozeIcon, OtherVehicleIcon, CheckCircleIcon, PersonalLoanIcon, BusinessLoanIcon, HomeLoanIcon, ClockIcon, BellIcon, BellSlashIcon } from './icons';
@@ -261,9 +262,7 @@ const Dashboard: React.FC<DashboardProps> = ({ vehicles, onViewVehicle, snoozed,
                 const nextDueStr = `${nextDueDateMidnight.getFullYear()}-${String(nextDueDateMidnight.getMonth()+1).padStart(2,'0')}-${String(nextDueDateMidnight.getDate()).padStart(2,'0')}`;
 
                 // Calculate End Date
-                // Subtract 1 from tenure because Start Month is Month 1.
-                // e.g. Start Jan, Tenure 12. End is Dec (Month 11, not 12).
-                const endDateObj = new Date(sY, parseInt(sMStr) - 1 + emi.totalTenure - 1, parseInt(sDStr));
+                const endDateObj = new Date(sY, parseInt(sMStr) - 1 + emi.totalTenure, parseInt(sDStr));
                 const endDateStr = `${endDateObj.getFullYear()}-${String(endDateObj.getMonth()+1).padStart(2,'0')}-${String(endDateObj.getDate()).padStart(2,'0')}`;
                 
                 const reminderItem: ReminderItem = { 

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import useLocalStorage from './hooks/useLocalStorage';
 import { Vehicle, VehicleType, Emi, Document, PREDEFINED_DOC_NAMES, EmiPayment, AlarmLog, MACHINE_TYPES } from './types';
@@ -594,17 +595,11 @@ const AddDocModal: React.FC<{
                 }
             } else {
                 resetForm();
-                // Check if the default selection is already present and warn immediately
-                const defaultName = availableDocNames[0];
-                const existing = activeDocuments.find(d => d.name === defaultName);
-                if (existing && !isRenewing) {
-                     setDocNameError(`"${defaultName}" is already available. Please delete the existing one or renew it.`);
-                }
             }
         } else {
             resetForm();
         }
-    }, [isOpen, initialData, isEditing, availableDocNames, activeDocuments, isRenewing]);
+    }, [isOpen, initialData, isEditing, availableDocNames]);
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -1075,732 +1070,954 @@ const OverduePaymentModal: React.FC<{
         <Modal isOpen={isOpen} onClose={onClose} title="Log Overdue Payment">
             <div className="space-y-4">
                 <div>
-                    <label className="text-sm text-slate-400 mb-1 block">Payment Date</label>
-                    <input type="date" value={paidDate} onChange={e => setPaidDate(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" max={new Date().toISOString().split('T')[0]} />
+                    <label className="text-sm text-slate-400">Paid Date</label>
+                    <input type="date" value={paidDate} onChange={e => setPaidDate(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
                 </div>
                 <div>
-                     <label className="text-sm text-slate-400 mb-1 block">Bounce/Late Charges (Optional)</label>
-                     <input type="number" placeholder="Enter amount if any" value={bounceCharges} onChange={e => setBounceCharges(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" />
+                    <label className="text-sm text-slate-400">Bounce Charges (if any)</label>
+                    <input type="number" placeholder="Enter amount" value={bounceCharges} onChange={e => setBounceCharges(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" />
                 </div>
-                <button onClick={handleSubmit} className="w-full bg-green-600 hover:bg-green-700 p-2 rounded text-white font-bold mt-4">Confirm Payment</button>
+                <div className="flex justify-end gap-2 pt-2">
+                    <button onClick={onClose} className="bg-slate-600 hover:bg-slate-700 p-2 px-4 rounded text-white font-bold">Cancel</button>
+                    <button onClick={handleSubmit} className="bg-green-600 hover:bg-green-700 p-2 px-4 rounded text-white font-bold">Confirm</button>
+                </div>
             </div>
         </Modal>
     );
 };
 
-const AuthScreen: React.FC = () => {
-    const [email, setEmail] = useState('');
+const TodayPaymentConfirmationModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onConfirm: () => void;
+}> = ({ isOpen, onClose, onConfirm }) => (
+     <Modal isOpen={isOpen} onClose={onClose} title="Confirm Payment">
+        <div className="space-y-4">
+            <p className="text-slate-300">Are you sure you want to mark this EMI as paid?</p>
+            <div className="flex justify-end gap-2 pt-2">
+                <button onClick={onClose} className="bg-slate-600 hover:bg-slate-700 p-2 px-4 rounded text-white font-bold">Cancel</button>
+                <button onClick={onConfirm} className="bg-green-600 hover:bg-green-700 p-2 px-4 rounded text-white font-bold">Confirm</button>
+            </div>
+        </div>
+    </Modal>
+);
+
+const SettleLoanModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onSubmit: (settleAmount: number, settleDate: string) => void;
+}> = ({ isOpen, onClose, onSubmit }) => {
+    const [settleAmount, setSettleAmount] = useState('');
+    const [settleDate, setSettleDate] = useState(new Date().toISOString().split('T')[0]);
+
+    const handleSubmit = () => {
+        if (!settleAmount || !settleDate) return;
+        onSubmit(parseFloat(settleAmount), settleDate);
+    };
+
+    useEffect(() => {
+        if (!isOpen) {
+            setSettleAmount('');
+            setSettleDate(new Date().toISOString().split('T')[0]);
+        }
+    }, [isOpen]);
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Settle Loan">
+             <div className="space-y-4">
+                <div>
+                    <label className="text-sm text-slate-400">Settlement Amount</label>
+                    <input type="number" placeholder="Enter final amount" value={settleAmount} onChange={e => setSettleAmount(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
+                </div>
+                <div>
+                    <label className="text-sm text-slate-400">Settlement Date</label>
+                    <input type="date" value={settleDate} onChange={e => setSettleDate(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                    <button onClick={onClose} className="bg-slate-600 hover:bg-slate-700 p-2 px-4 rounded text-white font-bold">Cancel</button>
+                    <button onClick={handleSubmit} className="bg-blue-600 hover:bg-blue-700 p-2 px-4 rounded text-white font-bold">Confirm Settlement</button>
+                </div>
+            </div>
+        </Modal>
+    )
+};
+
+const ConfirmationModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onConfirm: () => void;
+    title: string;
+    children: React.ReactNode;
+}> = ({ isOpen, onClose, onConfirm, title, children }) => {
+    if (!isOpen) return null;
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={title}>
+            <div className="space-y-4">
+                <div className="text-slate-300">{children}</div>
+                <div className="flex justify-end gap-2 pt-2">
+                    <button onClick={onClose} className="bg-slate-600 hover:bg-slate-700 p-2 px-4 rounded text-white font-bold">Cancel</button>
+                    <button onClick={onConfirm} className="bg-red-600 hover:bg-red-700 p-2 px-4 rounded text-white font-bold">Confirm</button>
+                </div>
+            </div>
+        </Modal>
+    );
+};
+
+const ResetPasswordModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+}> = ({ isOpen, onClose }) => {
     const [password, setPassword] = useState('');
-    const [isLogin, setIsLogin] = useState(true);
     const [loading, setLoading] = useState(false);
-    const [message, setMessage] = useState<{type: 'error' | 'success', text: string} | null>(null);
-    const [showOtpInput, setShowOtpInput] = useState(false);
-    const [otp, setOtp] = useState('');
-    const [showForgotPassword, setShowForgotPassword] = useState(false);
+    const [message, setMessage] = useState('');
 
-    const handleAuth = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!supabase) return;
         setLoading(true);
-        setMessage(null);
-
         try {
-            if (showForgotPassword) {
-                const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                    redirectTo: window.location.href, // Redirect back to app
-                });
-                if (error) throw error;
-                setMessage({ type: 'success', text: 'Password reset link sent to your email.' });
-                setLoading(false);
-                return;
-            }
-
-            if (isLogin) {
-                const { error } = await supabase.auth.signInWithPassword({ email, password });
-                if (error) {
-                    if (error.message.includes("Email not confirmed")) {
-                        // Attempt to resend logic or guide user
-                        throw new Error("Please verify your email address before logging in.");
-                    }
-                    throw error;
-                }
-            } else {
-                const { error, data } = await supabase.auth.signUp({ email, password });
-                if (error) throw error;
-                
-                // Check if session is already established (Direct Login enabled)
-                if (data.session) {
-                    // Logged in immediately!
-                    setMessage({ type: 'success', text: 'Account created and logged in!' });
-                } else if (data.user && data.user.identities && data.user.identities.length === 0) {
-                     setMessage({ type: 'error', text: 'This email is already registered. Please log in.' });
-                } else {
-                    // User created but needs verification.
-                    // IMPORTANT: You asked to switch to OTP or disable verification.
-                    // If Supabase sends a link by default, we can't force OTP unless configured.
-                    // However, we can TRY to show OTP input if you configured SMTP. 
-                    // Since we can't know config, we'll assume Direct Login failed and ask for OTP/Link.
-                    setMessage({ type: 'success', text: 'Registration successful! If you received a code, enter it below.' });
-                    setShowOtpInput(true);
-                }
-            }
-        } catch (error: any) {
-            let msg = error.message;
-            if (msg.includes("rate limit") || msg.includes("security purposes")) {
-                msg = "Please wait a few seconds before trying again.";
-            }
-            if (msg.includes("User already registered")) {
-                msg = "This email is already registered. Please log in.";
-            }
-            setMessage({ type: 'error', text: msg });
+            if (!supabase) throw new Error("Supabase client not initialized");
+            const { error } = await supabase.auth.updateUser({ password });
+            if (error) throw error;
+            setMessage('Password updated successfully! You can now use the app.');
+            setTimeout(() => {
+                onClose();
+            }, 2000);
+        } catch (err: any) {
+            setMessage(err.message || 'Error updating password');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleOtpVerification = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!supabase) return;
-        setLoading(true);
-        try {
-             const { error } = await supabase.auth.verifyOtp({
-                email,
-                token: otp,
-                type: 'signup'
-            });
-            if (error) throw error;
-             setMessage({ type: 'success', text: 'Verified successfully!' });
-        } catch (error: any) {
-            setMessage({ type: 'error', text: error.message });
-        } finally {
-             setLoading(false);
+    if (!isOpen) return null;
+
+    return (
+        <Modal isOpen={isOpen} onClose={() => {}} title="Set New Password">
+            <form onSubmit={handleSubmit} className="space-y-4">
+                {message && <div className={`p-2 rounded text-sm ${message.includes('success') ? 'bg-green-900/50 text-green-200' : 'bg-red-900/50 text-red-200'}`}>{message}</div>}
+                <div>
+                    <label className="block text-sm text-slate-400 mb-1">New Password</label>
+                    <input 
+                        type="password" 
+                        value={password} 
+                        onChange={e => setPassword(e.target.value)} 
+                        className="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white" 
+                        required 
+                        minLength={6} 
+                        placeholder="Enter new password"
+                    />
+                </div>
+                <button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 p-2 rounded text-white font-bold disabled:bg-slate-600">
+                    {loading ? 'Updating...' : 'Update Password'}
+                </button>
+            </form>
+        </Modal>
+    );
+};
+
+const SettingsModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    reminderTime: string;
+    soundPreference: string;
+    onTimeChange: (time: string) => void;
+    onSoundChange: (sound: string) => void;
+    onLogout: () => void;
+    onExport: () => void;
+    onImport: (file: File) => void;
+}> = ({ isOpen, onClose, reminderTime, soundPreference, onTimeChange, onSoundChange, onLogout, onExport, onImport }) => {
+    const [h, m] = (reminderTime || '11:00').split(':').map(Number);
+    const currentPeriod = h >= 12 ? 'PM' : 'AM';
+    const currentHour12 = h % 12 || 12;
+    const currentHourStr = String(currentHour12).padStart(2, '0');
+    const currentMinuteStr = String(m).padStart(2, '0');
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleTimeUpdate = (newH: string, newM: string, newP: string) => {
+        let hour = parseInt(newH, 10);
+        if (newP === 'PM' && hour !== 12) hour += 12;
+        if (newP === 'AM' && hour === 12) hour = 0;
+        const timeStr = `${String(hour).padStart(2, '0')}:${newM}`;
+        onTimeChange(timeStr);
+    };
+
+    const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            onImport(e.target.files[0]);
+        }
+    };
+    
+    const playSound = (type: string) => {
+        const audioUrl = SOUND_URLS[type as keyof typeof SOUND_URLS];
+        if (audioUrl) {
+            new Audio(audioUrl).play().catch(e => console.error("Audio play failed", e));
         }
     };
 
-    const toggleMode = () => {
-        setIsLogin(!isLogin);
-        setMessage(null);
-        setShowOtpInput(false);
-        setShowForgotPassword(false);
-    };
+    const hours = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+    const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen p-4">
-             <div className="bg-slate-800 p-8 rounded-lg shadow-xl w-full max-w-md border border-slate-700">
-                <h1 className="text-3xl font-bold text-center text-indigo-400 mb-2">Due Guardian</h1>
-                <p className="text-center text-slate-400 mb-8">{showForgotPassword ? 'Reset Password' : (showOtpInput ? 'Enter Code' : (isLogin ? 'Welcome Back' : 'Create Account'))}</p>
+         <Modal isOpen={isOpen} onClose={onClose} title="Settings">
+            <div className="space-y-6">
+                <div>
+                    <h3 className="text-lg font-semibold text-white mb-2">Notifications</h3>
+                    <label className="block text-sm text-slate-400 mb-2">Default Reminder Time</label>
+                    <div className="flex items-center gap-2 bg-slate-700 border border-slate-600 rounded p-2 mb-4">
+                         <select 
+                            value={currentHourStr} 
+                            onChange={(e) => handleTimeUpdate(e.target.value, currentMinuteStr, currentPeriod)}
+                            className="bg-transparent text-white outline-none appearance-none text-center w-16 font-bold text-lg cursor-pointer"
+                        >
+                            {hours.map(h => <option key={h} value={h} className="bg-slate-800">{h}</option>)}
+                        </select>
+                        <span className="text-white font-bold">:</span>
+                        <select 
+                            value={currentMinuteStr} 
+                            onChange={(e) => handleTimeUpdate(currentHourStr, e.target.value, currentPeriod)}
+                            className="bg-transparent text-white outline-none appearance-none text-center w-16 font-bold text-lg cursor-pointer"
+                        >
+                            {minutes.map(m => <option key={m} value={m} className="bg-slate-800">{m}</option>)}
+                        </select>
+                        <select 
+                            value={currentPeriod} 
+                            onChange={(e) => handleTimeUpdate(currentHourStr, currentMinuteStr, e.target.value)}
+                            className="bg-transparent text-white outline-none appearance-none text-center w-16 font-bold text-lg cursor-pointer ml-auto"
+                        >
+                            <option value="AM" className="bg-slate-800">AM</option>
+                            <option value="PM" className="bg-slate-800">PM</option>
+                        </select>
+                    </div>
+
+                    <label className="block text-sm text-slate-400 mb-2">Notification Sound (Ringtone)</label>
+                    <div className="flex items-center gap-2">
+                        <select 
+                            value={soundPreference || 'subtle'} 
+                            onChange={(e) => onSoundChange(e.target.value)}
+                            className="flex-grow bg-slate-700 border border-slate-600 text-white rounded p-2 outline-none"
+                        >
+                            <option value="subtle">Subtle (Digital)</option>
+                            <option value="attention">Attention (Alarm)</option>
+                            <option value="urgent">Urgent (Siren)</option>
+                        </select>
+                        <button 
+                            onClick={() => playSound(soundPreference || 'subtle')} 
+                            className="p-2 bg-indigo-600 hover:bg-indigo-700 rounded text-white"
+                            title="Test Sound"
+                        >
+                            <BellIcon className="w-5 h-5" />
+                        </button>
+                    </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-700">
+                    <h3 className="text-lg font-semibold text-white mb-2">Data Backup & Restore</h3>
+                    <p className="text-xs text-slate-400 mb-3">
+                        Use this to transfer data between phones if offline.
+                    </p>
+                    <div className="flex gap-2">
+                         <button onClick={onExport} className="flex-1 bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-2 rounded flex items-center justify-center gap-2 text-sm">
+                            <DownloadIcon className="w-4 h-4" />
+                            <span>Backup Data</span>
+                        </button>
+                        <button onClick={() => fileInputRef.current?.click()} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-2 rounded flex items-center justify-center gap-2 text-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M11 15h2V9h3l-4-5-4 5h3zM20 18H4v-7H2v7c0 1.103.897 2 2 2h16c1.103 0 2-.897 2-2v-7h-2v7z"></path></svg>
+                            <span>Restore Data</span>
+                        </button>
+                        <input type="file" ref={fileInputRef} onChange={handleFileImport} className="hidden" accept=".json" />
+                    </div>
+                </div>
                 
-                {message && (
-                    <div className={`p-3 rounded mb-4 text-sm ${message.type === 'error' ? 'bg-red-900/50 text-red-200 border border-red-500' : 'bg-green-900/50 text-green-200 border border-green-500'}`}>
-                        {message.text}
-                    </div>
-                )}
-
-                {showOtpInput ? (
-                    <form onSubmit={handleOtpVerification} className="space-y-4">
-                         <input 
-                            type="text" 
-                            placeholder="Enter 6-digit Code" 
-                            value={otp} 
-                            onChange={e => setOtp(e.target.value)} 
-                            className="w-full p-3 bg-slate-700 border border-slate-600 rounded text-white" 
-                            required 
-                        />
-                         <button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 p-3 rounded text-white font-bold transition-colors">
-                            {loading ? 'Verifying...' : 'Verify & Login'}
-                        </button>
-                        <button type="button" onClick={() => setShowOtpInput(false)} className="w-full text-sm text-slate-400 hover:text-white mt-2">Back</button>
-                    </form>
-                ) : (
-                    <form onSubmit={handleAuth} className="space-y-4">
-                        <input 
-                            type="email" 
-                            placeholder="Email Address" 
-                            value={email} 
-                            onChange={e => setEmail(e.target.value)} 
-                            className="w-full p-3 bg-slate-700 border border-slate-600 rounded text-white" 
-                            required 
-                        />
-                         {!showForgotPassword && (
-                             <input 
-                                type="password" 
-                                placeholder="Password" 
-                                value={password} 
-                                onChange={e => setPassword(e.target.value)} 
-                                className="w-full p-3 bg-slate-700 border border-slate-600 rounded text-white" 
-                                required 
-                            />
-                         )}
-                        
-                        <button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 p-3 rounded text-white font-bold transition-colors">
-                            {loading ? 'Processing...' : (showForgotPassword ? 'Send Reset Link' : (isLogin ? 'Login' : 'Sign Up'))}
-                        </button>
-                    </form>
-                )}
-
-                {!showOtpInput && (
-                    <div className="mt-6 text-center text-sm space-y-2">
-                        {showForgotPassword ? (
-                            <button onClick={() => setShowForgotPassword(false)} className="text-indigo-400 hover:text-indigo-300">Back to Login</button>
-                        ) : (
-                            <>
-                                <p className="text-slate-400">
-                                    {isLogin ? "Don't have an account? " : "Already have an account? "}
-                                    <button onClick={toggleMode} className="text-indigo-400 hover:text-indigo-300 font-bold">
-                                        {isLogin ? 'Sign Up' : 'Login'}
-                                    </button>
-                                </p>
-                                {isLogin && <button onClick={() => setShowForgotPassword(true)} className="text-slate-500 hover:text-slate-300 text-xs">Forgot Password?</button>}
-                            </>
-                        )}
-                    </div>
-                )}
-             </div>
-             
-             {!isLogin && !showOtpInput && (
-                 <div className="mt-8 text-center max-w-xs text-xs text-slate-500">
-                     <p className="font-semibold text-slate-400 mb-1">Developer Note:</p>
-                     <p>If "Confirm Email" is enabled in Supabase, you must verify your email before logging in. Disable it in Supabase Auth settings for instant access.</p>
-                 </div>
-             )}
-        </div>
+                <div className="pt-4 border-t border-slate-700">
+                     <h3 className="text-lg font-semibold text-white mb-2">Account</h3>
+                     <button onClick={onLogout} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded flex items-center justify-center gap-2">
+                        <LogoutIcon className="w-5 h-5" />
+                        <span>Logout</span>
+                     </button>
+                </div>
+            </div>
+         </Modal>
     );
 }
 
-const App: React.FC = () => {
-  // Use LocalStorage as a fallback or cache, but Supabase is primary
-  const [vehicles, setVehicles] = useLocalStorage<Vehicle[]>('vehicles', []);
-  const [snoozed, setSnoozed] = useLocalStorage<Record<string, number>>('snoozed', {});
-  const [session, setSession] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<View>('dashboard');
-  const [activeVehicleId, setActiveVehicleId] = useState<string | null>(null);
-  
-  // Modals
-  const [isVehicleModalOpen, setVehicleModalOpen] = useState(false);
-  const [vehicleModalMode, setVehicleModalMode] = useState<'asset' | 'loan'>('asset');
-  const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
-  const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [deleteVehicleId, setDeleteVehicleId] = useState<string | null>(null);
-  const [isInstallModalOpen, setInstallModalOpen] = useState(false);
-  const [editingEmi, setEditingEmi] = useState<{emi: Emi | null, vehicleType: string} | null>(null);
-  const [isOverdueModalOpen, setOverdueModalOpen] = useState(false);
-  const [overdueEmiTarget, setOverdueEmiTarget] = useState<{emiId: string, vehicleId: string} | null>(null);
-  const [resetPasswordMode, setResetPasswordMode] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
+// --- Auth Components ---
 
-  // --- Auth & Data Sync ---
-  useEffect(() => {
+type AuthMode = 'login' | 'signup' | 'forgot_password';
+
+const AuthScreen: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
+  const [authMode, setAuthMode] = useState<AuthMode>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!supabase) {
-        setLoading(false);
+        setError("Database not connected. Please check configuration.");
         return;
     }
+    setError('');
+    setSuccessMessage('');
+    setLoading(true);
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-      if (session) fetchData(session.user.id);
-    });
+    try {
+        if (authMode === 'forgot_password') {
+             const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                 redirectTo: window.location.href, // Redirects back to app to handle reset
+             });
+             if (error) throw error;
+             setSuccessMessage("Password reset link sent! Check your email (and spam folder) to reset your password.");
+        } else if (authMode === 'signup') {
+            const { data, error } = await supabase.auth.signUp({ email, password });
+            if (error) throw error;
+            
+            // 1. Check if Supabase logged us in directly (happens if 'Confirm Email' is OFF)
+            if (data.session) {
+                return; // Auto-login will be handled by the session state listener
+            }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      if (session) {
-          fetchData(session.user.id);
-      }
-      if (_event === 'PASSWORD_RECOVERY') {
-          setResetPasswordMode(true);
-      }
-    });
+            // 2. If no session, it means 'Confirm Email' is ON.
+            // We try to Force Login just in case (sometimes helps update state, or fails fast)
+            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+            
+            if (signInData.session) {
+                return;
+            }
 
-    return () => subscription.unsubscribe();
-  }, []);
+            // 3. If login failed specifically because of email not confirmed, tell the user to fix their config.
+            if (signInError && signInError.message.includes("Email not confirmed")) {
+                 setError("Account created! To login immediately without verification, please disable 'Confirm Email' in your Supabase Authentication settings.");
+            } else {
+                 // Fallback for other issues
+                 setSuccessMessage("Account created. Please try logging in.");
+                 setAuthMode('login'); 
+            }
 
-  const fetchData = async (userId: string) => {
-      if (!supabase) return;
-      // Fetch user data
-      const { data, error } = await supabase
-        .from('user_data')
-        .select('vehicles, snoozed')
-        .eq('user_id', userId)
-        .single();
-    
-      if (data) {
-          if (data.vehicles) setVehicles(data.vehicles);
-          if (data.snoozed) setSnoozed(data.snoozed);
-      }
+        } else {
+            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) throw error;
+            // Login successful
+        }
+    } catch (err: any) {
+        const msg = err.message || "";
+        if (msg.includes("Invalid login credentials")) {
+            setError("Incorrect email or password. If you haven't created an account, please Sign Up first.");
+        } else if (msg.includes("Email not confirmed")) {
+            setError("Please confirm your email address. Check your inbox (and spam folder) for the verification link.");
+        } else if (msg.toLowerCase().includes("security purposes") || msg.toLowerCase().includes("wait")) {
+            setError("Too many attempts. Please wait a few seconds before trying again.");
+        } else {
+            setError(msg);
+        }
+    } finally {
+        setLoading(false);
+    }
   };
 
-  const saveData = async (newVehicles: Vehicle[], newSnoozed: Record<string, number>) => {
-      if (!supabase || !session) return;
-      
-      // Update local state first for instant UI
-      setVehicles(newVehicles);
-      setSnoozed(newSnoozed);
-
-      // Background sync
-      const { error } = await supabase
-        .from('user_data')
-        .upsert({ 
-            user_id: session.user.id, 
-            vehicles: newVehicles, 
-            snoozed: newSnoozed,
-            updated_at: new Date().toISOString()
-        });
-      
-      if (error) console.error("Sync Error", error);
-  };
-
-  // --- Actions ---
-
-  const handleAddVehicle = (data: Omit<Vehicle, 'id' | 'documents' | 'emis' | 'archivedDocuments'>) => {
-      const newVehicle: Vehicle = {
-          ...data,
-          id: crypto.randomUUID(),
-          documents: [],
-          emis: [],
-          archivedDocuments: []
-      };
-      
-      if (editingVehicle) {
-          const updated = vehicles.map(v => v.id === editingVehicle.id ? { ...v, ...data } : v);
-          saveData(updated, snoozed);
-      } else {
-          saveData([...vehicles, newVehicle], snoozed);
-      }
-      setEditingVehicle(null);
-  };
-
-  const handleDeleteVehicle = (reason: string) => {
-      if (!deleteVehicleId) return;
-      const updated = vehicles.filter(v => v.id !== deleteVehicleId);
-      // Ideally log the deletion reason somewhere, for now just delete
-      saveData(updated, snoozed);
-      setDeleteModalOpen(false);
-      if (activeVehicleId === deleteVehicleId) {
-          setView('vehicleList');
-          setActiveVehicleId(null);
-      }
-  };
-
-  const handleAddEmi = (emiData: Omit<Emi, 'id'>, existingId?: string) => {
-      if (!activeVehicleId) return;
-      const updatedVehicles = vehicles.map(v => {
-          if (v.id !== activeVehicleId) return v;
-          let newEmis = [...v.emis];
-          if (existingId) {
-              newEmis = newEmis.map(e => e.id === existingId ? { ...e, ...emiData } : e);
-          } else {
-              newEmis.push({ ...emiData, id: crypto.randomUUID(), paidInstallments: emiData.paidInstallments || 0 });
-          }
-          return { ...v, emis: newEmis };
-      });
-      saveData(updatedVehicles, snoozed);
-  };
-
-  const handleMarkEmiPaid = (emi: Emi, vehicleId: string, category: 'overdue' | 'today') => {
-      if (category === 'overdue') {
-          // Open modal to capture actual payment date for overdue items
-          setOverdueEmiTarget({ emiId: emi.id, vehicleId });
-          setOverdueModalOpen(true);
-      } else {
-          // For Today/Future, assume paid today
-          confirmEmiPayment(vehicleId, emi.id, new Date().toISOString().split('T')[0], 0);
-      }
-  };
-
-  const confirmEmiPayment = (vehicleId: string, emiId: string, paidDate: string, bounceCharges: number) => {
-        const updatedVehicles = vehicles.map(v => {
-          if (v.id !== vehicleId) return v;
-          const newEmis = v.emis.map(e => {
-              if (e.id !== emiId) return e;
-              
-              const history = e.paymentHistory || [];
-              
-              // Determine due date for this installment
-              let [sY, sM, sD] = e.startDate.split('-').map(Number);
-              if (sY < 100) sY += 2000;
-              const dueDateObj = new Date(sY, sM - 1 + e.paidInstallments, sD);
-              const dueDateStr = `${dueDateObj.getFullYear()}-${String(dueDateObj.getMonth()+1).padStart(2,'0')}-${String(dueDateObj.getDate()).padStart(2,'0')}`;
-              
-              const isLate = new Date(paidDate) > new Date(dueDateStr);
-              
-              const newPayment: EmiPayment = {
-                  dueDate: dueDateStr,
-                  paidDate: paidDate,
-                  status: isLate ? 'late' : 'on-time',
-                  amount: e.amount,
-                  bounceCharges: bounceCharges > 0 ? bounceCharges : undefined
-              };
-
-              // Clear Alarm config if it was ringing
-              const newAlarmConfig = e.alarmConfig ? { ...e.alarmConfig, hasRung: false, isDismissed: false } : undefined;
-
-              return { 
-                  ...e, 
-                  paidInstallments: e.paidInstallments + 1,
-                  extraCharges: (e.extraCharges || 0) + bounceCharges,
-                  paymentHistory: [...history, newPayment],
-                  alarmConfig: newAlarmConfig
-              };
-          });
-          return { ...v, emis: newEmis };
-      });
-      saveData(updatedVehicles, snoozed);
-      setOverdueModalOpen(false);
-      setOverdueEmiTarget(null);
-  };
-
-  const handleAddDoc = (docData: Omit<Document, 'id'>, replacingDocId?: string) => {
-      if (!activeVehicleId) return;
-      const updatedVehicles = vehicles.map(v => {
-          if (v.id !== activeVehicleId) return v;
-          let newDocs = [...v.documents];
-          let archived = [...v.archivedDocuments];
-
-          if (replacingDocId) {
-              const oldDoc = newDocs.find(d => d.id === replacingDocId);
-              if (oldDoc) {
-                  archived.push(oldDoc);
-                  newDocs = newDocs.filter(d => d.id !== replacingDocId);
-              }
-          }
-          newDocs.push({ ...docData, id: crypto.randomUUID() });
-          return { ...v, documents: newDocs, archivedDocuments: archived };
-      });
-      saveData(updatedVehicles, snoozed);
-  };
-
-  const handleUpdateDoc = (docId: string, docData: Omit<Document, 'id'>) => {
-      if (!activeVehicleId) return;
-      const updatedVehicles = vehicles.map(v => {
-          if (v.id !== activeVehicleId) return v;
-          const newDocs = v.documents.map(d => d.id === docId ? { ...d, ...docData } : d);
-          return { ...v, documents: newDocs };
-      });
-      saveData(updatedVehicles, snoozed);
-  };
-
-  const handleDeleteDoc = (doc: Document) => {
-      if (!activeVehicleId || !window.confirm(`Delete ${doc.name}?`)) return;
-      const updatedVehicles = vehicles.map(v => {
-          if (v.id !== activeVehicleId) return v;
-          return { ...v, documents: v.documents.filter(d => d.id !== doc.id) };
-      });
-      saveData(updatedVehicles, snoozed);
-  };
-
-  const handleSnooze = (itemId: string, minutes: number = 24 * 60) => { // Default 1 day
-      const snoozeUntil = Date.now() + minutes * 60 * 1000;
-      const newSnoozed = { ...snoozed, [itemId]: snoozeUntil };
-      saveData(vehicles, newSnoozed);
-  };
-
-  const handleSnoozeAlarm = (emiId: string, vehicleId: string) => {
-      const updatedVehicles = vehicles.map(v => {
-          if (v.id !== vehicleId) return v;
-          return {
-              ...v,
-              emis: v.emis.map(e => {
-                  if (e.id !== emiId) return e;
-                  const config = e.alarmConfig || {
-                       date: new Date().toISOString().split('T')[0],
-                       nextTrigger: new Date().toISOString(),
-                       snoozeCount: 0,
-                       hasRung: false,
-                       isDismissed: false,
-                       history: []
-                  };
-                  // Snooze for 10 minutes
-                  const nextTime = new Date();
-                  nextTime.setMinutes(nextTime.getMinutes() + 10);
-                  
-                  return {
-                      ...e,
-                      alarmConfig: {
-                          ...config,
-                          nextTrigger: nextTime.toISOString(),
-                          snoozeCount: config.snoozeCount + 1,
-                          hasRung: false,
-                          history: [...config.history, { timestamp: new Date().toISOString(), action: 'snooze' as const }]
-                      }
-                  };
-              })
-          };
-      });
-      saveData(updatedVehicles, snoozed);
-  };
-
-  const handleSetManualAlarm = (emiId: string, vehicleId: string, time: string) => {
-      const updatedVehicles = vehicles.map(v => {
-          if (v.id !== vehicleId) return v;
-          return {
-              ...v,
-              emis: v.emis.map(e => {
-                  if (e.id !== emiId) return e;
-                   const [hours, minutes] = time.split(':').map(Number);
-                   const nextTrigger = new Date();
-                   nextTrigger.setHours(hours, minutes, 0, 0);
-                   
-                   // If time is past, set for tomorrow? No, user usually means today if they set it manually. 
-                   // But if it's strictly overdue, maybe. Let's assume today.
-                   
-                   const config = e.alarmConfig || {
-                       date: new Date().toISOString().split('T')[0],
-                       nextTrigger: new Date().toISOString(),
-                       snoozeCount: 0,
-                       hasRung: false,
-                       isDismissed: false,
-                       history: []
-                  };
-
-                  return {
-                      ...e,
-                      alarmConfig: {
-                          ...config,
-                          manualTime: time,
-                          nextTrigger: nextTrigger.toISOString(),
-                          hasRung: false,
-                          isDismissed: false,
-                          history: [...config.history, { timestamp: new Date().toISOString(), action: 'manual_set' as const, details: time }]
-                      }
-                  };
-              })
-          };
-      });
-      saveData(updatedVehicles, snoozed);
-  };
-
-  const handleDismissAlarm = (emiId: string, vehicleId: string) => {
-      const updatedVehicles = vehicles.map(v => {
-          if (v.id !== vehicleId) return v;
-          return {
-              ...v,
-              emis: v.emis.map(e => {
-                  if (e.id !== emiId) return e;
-                  if (!e.alarmConfig) return e;
-                  return {
-                      ...e,
-                      alarmConfig: {
-                          ...e.alarmConfig,
-                          isDismissed: true,
-                          hasRung: false,
-                          history: [...e.alarmConfig.history, { timestamp: new Date().toISOString(), action: 'dismiss' as const }]
-                      }
-                  };
-              })
-          };
-      });
-      saveData(updatedVehicles, snoozed);
-  };
-  
-  const handleSettleLoan = (emi: Emi) => {
-      if (!activeVehicleId || !window.confirm("Are you sure you want to settle this loan? This will mark all remaining EMIs as paid.")) return;
-      
-      const settleDate = new Date().toISOString().split('T')[0];
-      // Amount remaining
-      const remaining = (emi.totalTenure - emi.paidInstallments) * emi.amount;
-      
-      const updatedVehicles = vehicles.map(v => {
-          if (v.id !== activeVehicleId) return v;
-          return {
-              ...v,
-              emis: v.emis.map(e => {
-                  if (e.id !== emi.id) return e;
-                  return {
-                      ...e,
-                      paidInstallments: e.totalTenure, // Mark full
-                      settlementDetails: {
-                          amount: remaining,
-                          date: settleDate
-                      }
-                  };
-              })
-          };
-      });
-      saveData(updatedVehicles, snoozed);
-  };
-
-  const handleUpdatePassword = async () => {
-      if (!supabase) return;
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) {
-          alert("Error updating password: " + error.message);
-      } else {
-          alert("Password updated successfully!");
-          setResetPasswordMode(false);
-          setNewPassword('');
-      }
-  };
-
-
-  const activeVehicle = vehicles.find(v => v.id === activeVehicleId);
-
-  const getUsername = () => {
-      if (!session || !session.user || !session.user.email) return 'User';
-      return session.user.email.split('@')[0];
-  };
-
-  if (loading) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading...</div>;
-
-  if (!session) return <AuthScreen />;
+  const toggleMode = (mode: AuthMode) => {
+      setAuthMode(mode);
+      setError('');
+      setSuccessMessage('');
+  }
 
   return (
-    <div className="min-h-screen bg-slate-900 pb-20 md:pb-0">
-        <header className="bg-slate-800 p-4 sticky top-0 z-20 border-b border-slate-700 flex justify-between items-center shadow-lg">
-            <div className="flex items-center space-x-2" onClick={() => { setView('dashboard'); setActiveVehicleId(null); }}>
-                <div className="bg-indigo-600 p-2 rounded-lg">
-                    <DashboardIcon className="w-6 h-6 text-white" />
-                </div>
-                <h1 className="text-xl font-bold text-white tracking-tight">Due Guardian</h1>
-            </div>
-            <div className="flex items-center space-x-3">
-                 <button onClick={() => setInstallModalOpen(true)} className="text-slate-400 hover:text-white" title="Install App">
-                    <DownloadIcon className="w-5 h-5" />
-                </button>
-                 <span className="text-xs font-mono text-emerald-400 bg-emerald-900/30 px-2 py-1 rounded hidden sm:inline-block">
-                    {getUsername()}
-                </span>
-                <button 
-                    onClick={() => supabase?.auth.signOut()}
-                    className="p-2 bg-slate-700 hover:bg-slate-600 rounded-full transition-colors text-slate-300 hover:text-white"
-                    title="Sign Out"
-                >
-                    <LogoutIcon className="w-5 h-5" />
-                </button>
-            </div>
-        </header>
+    <div className="min-h-screen flex items-center justify-center p-4">
+       <div className="bg-slate-800 p-8 rounded-lg shadow-xl w-full max-w-md">
+          <div className="flex flex-col items-center mb-6">
+              <svg className="w-16 h-16 text-indigo-400 mb-4" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="512" height="512" rx="96" fill="#1E293B" fillOpacity="0"/>
+                <path d="M256 74.6667L96 154.667V256C96 364.533 165.76 430.4 256 448C346.24 430.4 416 364.533 416 256V154.667L256 74.6667Z" stroke="currentColor" strokeWidth="24" strokeLinecap="round" strokeLinejoin="round"/>
+                <rect x="181" y="200" width="150" height="120" rx="10" stroke="white" strokeWidth="16"/>
+                <path d="M181 240H331" stroke="white" strokeWidth="16" strokeLinecap="round"/>
+                <path d="M221 180V220" stroke="white" strokeWidth="16" strokeLinecap="round"/>
+                <path d="M291 180V220" stroke="white" strokeWidth="16" strokeLinecap="round"/>
+            </svg>
+            <h1 className="text-3xl font-bold text-white">Due Guardian</h1>
+          </div>
+          <h2 className="text-xl font-bold text-indigo-400 mb-2 text-center">
+            {authMode === 'login' ? 'Welcome Back' : (authMode === 'signup' ? 'Create Account' : 'Reset Password')}
+          </h2>
+          
+          <form onSubmit={handleSubmit} className="space-y-4 mt-6">
+             {error && <div className="bg-red-900/50 text-red-200 p-3 rounded text-sm text-center border border-red-500/50">{error}</div>}
+             {successMessage && <div className="bg-green-900/50 text-green-200 p-3 rounded text-sm text-center border border-green-500/50">{successMessage}</div>}
+             
+             <div>
+               <label className="block text-sm text-slate-400 mb-1">Email</label>
+               <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white focus:border-indigo-500 outline-none" required />
+             </div>
+             
+             {authMode !== 'forgot_password' && (
+                 <div>
+                   <label className="block text-sm text-slate-400 mb-1">Password</label>
+                   <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white focus:border-indigo-500 outline-none" required minLength={6} />
+                 </div>
+             )}
+             
+             <button type="submit" disabled={loading || !supabase} className="w-full bg-indigo-600 hover:bg-indigo-700 p-2 rounded text-white font-bold mt-4 transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
+               {loading ? 'Processing...' : (authMode === 'login' ? 'Login' : (authMode === 'signup' ? 'Sign Up & Login' : 'Send Reset Link'))}
+             </button>
+          </form>
 
-        <main className="max-w-7xl mx-auto">
-            {resetPasswordMode && (
-                <div className="p-4 m-4 bg-slate-800 border border-indigo-500 rounded-lg">
-                    <h3 className="text-lg font-bold text-white mb-2">Set New Password</h3>
-                    <div className="flex gap-2">
-                        <input 
-                            type="password" 
-                            placeholder="New Password" 
-                            value={newPassword}
-                            onChange={e => setNewPassword(e.target.value)}
-                            className="flex-1 p-2 bg-slate-700 rounded text-white"
-                        />
-                        <button onClick={handleUpdatePassword} className="bg-indigo-600 text-white px-4 py-2 rounded font-bold">Update</button>
-                        <button onClick={() => setResetPasswordMode(false)} className="bg-slate-600 text-white px-4 py-2 rounded">Cancel</button>
-                    </div>
-                </div>
-            )}
-
-            {view === 'dashboard' && (
-                <Dashboard 
-                    vehicles={vehicles} 
-                    onViewVehicle={(id) => { setActiveVehicleId(id); setView('vehicleDetail'); }} 
-                    snoozed={snoozed}
-                    onSnoozeItem={handleSnooze}
-                    onMarkEmiPaid={(emi, vid, cat) => handleMarkEmiPaid(emi, vid, cat)}
-                    onSnoozeAlarm={handleSnoozeAlarm}
-                    onSetManualAlarm={handleSetManualAlarm}
-                    onDismissAlarm={handleDismissAlarm}
-                />
+          <div className="text-center text-slate-400 text-sm mt-6 space-y-2">
+            {authMode === 'login' && (
+                <>
+                    <p>
+                        Don't have an account?
+                        <button onClick={() => toggleMode('signup')} className="text-indigo-400 hover:underline ml-1 font-semibold">Sign Up</button>
+                    </p>
+                    <button onClick={() => toggleMode('forgot_password')} className="text-slate-500 hover:text-slate-300 text-xs mt-2">Forgot Password?</button>
+                </>
             )}
             
-            {view === 'vehicleList' && (
-                <VehicleList 
-                    vehicles={vehicles} 
-                    onSelectVehicle={(id) => { setActiveVehicleId(id); setView('vehicleDetail'); }} 
-                    onAddAssetClick={() => { setVehicleModalMode('asset'); setEditingVehicle(null); setVehicleModalOpen(true); }}
-                    onAddLoanClick={() => { setVehicleModalMode('loan'); setEditingVehicle(null); setVehicleModalOpen(true); }}
-                />
+            {authMode === 'signup' && (
+                 <p>
+                    Already have an account?
+                    <button onClick={() => toggleMode('login')} className="text-indigo-400 hover:underline ml-1 font-semibold">Login</button>
+                </p>
             )}
 
-            {view === 'vehicleDetail' && activeVehicle && (
-                <VehicleDetail 
-                    vehicle={activeVehicle} 
-                    onBack={() => { setView('vehicleList'); setActiveVehicleId(null); }}
-                    onAddDoc={handleAddDoc}
-                    onUpdateDoc={handleUpdateDoc}
-                    onDeleteDoc={handleDeleteDoc}
-                    onMarkEmiPaid={(emiId) => {
-                        const emi = activeVehicle.emis.find(e => e.id === emiId);
-                        if (emi) handleMarkEmiPaid(emi, activeVehicle.id, 'today');
-                    }}
-                    onOpenSettleModal={handleSettleLoan}
-                    onEditEmiClick={(emi) => {
-                        setEditingEmi({ emi, vehicleType: activeVehicle.type });
-                    }}
-                    onEditVehicle={() => {
-                        setEditingVehicle(activeVehicle);
-                        setVehicleModalMode([VehicleType.PersonalLoan, VehicleType.BusinessLoan, VehicleType.HomeLoan, VehicleType.Overdraft].includes(activeVehicle.type as any) ? 'loan' : 'asset');
-                        setVehicleModalOpen(true);
-                    }}
-                    onDeleteVehicle={() => {
-                        setDeleteVehicleId(activeVehicle.id);
-                        setDeleteModalOpen(true);
-                    }}
-                />
+            {authMode === 'forgot_password' && (
+                 <button onClick={() => toggleMode('login')} className="text-indigo-400 hover:underline font-semibold">Back to Login</button>
             )}
-
-            {view === 'reports' && <Reports vehicles={vehicles} />}
-        </main>
-        
-        {/* Mobile Navigation */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 flex justify-around p-3 pb-safe z-20 shadow-[0_-5px_10px_rgba(0,0,0,0.3)]">
-            <button 
-                onClick={() => { setView('dashboard'); setActiveVehicleId(null); }} 
-                className={`flex flex-col items-center ${view === 'dashboard' ? 'text-indigo-400' : 'text-slate-500'}`}
-            >
-                <DashboardIcon className="w-6 h-6" />
-                <span className="text-[10px] mt-1 font-medium">Dashboard</span>
-            </button>
-            <button 
-                onClick={() => { setView('vehicleList'); setActiveVehicleId(null); }} 
-                className={`flex flex-col items-center ${['vehicleList', 'vehicleDetail'].includes(view) ? 'text-indigo-400' : 'text-slate-500'}`}
-            >
-                <VehicleIcon className="w-6 h-6" />
-                <span className="text-[10px] mt-1 font-medium">Items</span>
-            </button>
-             <button 
-                onClick={() => { setView('reports'); setActiveVehicleId(null); }} 
-                className={`flex flex-col items-center ${view === 'reports' ? 'text-indigo-400' : 'text-slate-500'}`}
-            >
-                <SettingsIcon className="w-6 h-6" />
-                <span className="text-[10px] mt-1 font-medium">Reports</span>
-            </button>
-        </nav>
-
-        {/* Modals */}
-        <VehicleFormModal 
-            isOpen={isVehicleModalOpen} 
-            onClose={() => setVehicleModalOpen(false)} 
-            onSave={handleAddVehicle} 
-            mode={vehicleModalMode}
-            initialData={editingVehicle}
-        />
-
-        <DeleteVehicleModal
-            isOpen={isDeleteModalOpen}
-            onClose={() => setDeleteModalOpen(false)}
-            onConfirm={handleDeleteVehicle}
-            vehicleName={deleteVehicleId ? vehicles.find(v => v.id === deleteVehicleId)?.make + ' ' + vehicles.find(v => v.id === deleteVehicleId)?.model : 'Item'}
-        />
-
-        {editingEmi && (
-            <EmiFormModal 
-                isOpen={!!editingEmi} 
-                onClose={() => setEditingEmi(null)} 
-                onSubmit={handleAddEmi}
-                initialData={editingEmi.emi}
-                vehicleType={editingEmi.vehicleType}
-            />
-        )}
-        
-        <OverduePaymentModal 
-            isOpen={isOverdueModalOpen}
-            onClose={() => setOverdueModalOpen(false)}
-            onSubmit={(date, charges) => overdueEmiTarget && confirmEmiPayment(overdueEmiTarget.vehicleId, overdueEmiTarget.emiId, date, charges)}
-        />
-
-        <ManualInstallModal isOpen={isInstallModalOpen} onClose={() => setInstallModalOpen(false)} />
-        <AddToHomeScreenPrompt />
+          </div>
+       </div>
     </div>
   );
+}
+
+interface AuthenticatedAppProps {
+    currentUser: string; // Used for localStorage key prefix
+    userId: string; // Supabase User ID
+    onLogout: () => void;
+    isRecoveryMode?: boolean;
+    onResetPasswordSuccess?: () => void;
+}
+
+const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, userId, onLogout, isRecoveryMode, onResetPasswordSuccess }) => {
+    // Key localStorage by currentUser to separate data (Legacy fallback)
+    const [vehicles, setVehicles] = useLocalStorage<Vehicle[]>(`${currentUser}_vehicles`, []);
+    const [snoozed, setSnoozed] = useLocalStorage<Record<string, number>>(`${currentUser}_snoozedReminders`, {});
+    const [settings, setSettings] = useLocalStorage<{ reminderTime: string, soundPreference?: string }>(`${currentUser}_settings`, { reminderTime: '11:00', soundPreference: 'subtle' });
+    
+    // Derived username from email (e.g., 'john' from 'john@example.com')
+    const username = currentUser.split('@')[0];
+    const displayUsername = username.charAt(0).toUpperCase() + username.slice(1);
+
+    // --- Sync State Logic ---
+    const [isSyncing, setIsSyncing] = useState(false);
+    const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // 1. Load remote data on mount
+    useEffect(() => {
+        const fetchRemoteData = async () => {
+            if (!supabase) return;
+            setIsSyncing(true);
+            try {
+                const { data, error } = await supabase
+                    .from('user_data')
+                    .select('*')
+                    .eq('user_id', userId)
+                    .single();
+                
+                if (data) {
+                    // Only update local if remote exists and has data
+                    if (data.vehicles && Array.isArray(data.vehicles)) setVehicles(data.vehicles);
+                    if (data.snoozed) setSnoozed(data.snoozed);
+                    if (data.settings) setSettings(data.settings);
+                } else if (error && error.code !== 'PGRST116') {
+                    console.error("Fetch error:", error);
+                }
+            } catch (err) {
+                console.error("Sync load error", err);
+            } finally {
+                setIsSyncing(false);
+            }
+        };
+        fetchRemoteData();
+    }, [userId]);
+
+    // 2. Save to remote on change (Debounced)
+    useEffect(() => {
+        if (!supabase) return;
+        
+        if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+        
+        syncTimeoutRef.current = setTimeout(async () => {
+            setIsSyncing(true);
+            try {
+                const { error } = await supabase.from('user_data').upsert({
+                    user_id: userId,
+                    vehicles,
+                    snoozed,
+                    settings,
+                    updated_at: new Date().toISOString()
+                });
+                if (error) console.error("Sync save error", error);
+            } catch (err) {
+                console.error("Sync error", err);
+            } finally {
+                setIsSyncing(false);
+            }
+        }, 2000); // 2 second debounce
+
+        return () => { if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current); };
+    }, [vehicles, snoozed, settings, userId]);
+
+
+    const [view, setView] = useState<View>('dashboard');
+    const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+    const [isVehicleFormModalOpen, setVehicleFormModalOpen] = useState(false);
+    const [addModalMode, setAddModalMode] = useState<'asset' | 'loan'>('asset');
+    const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
+    const [isDeleteVehicleModalOpen, setDeleteVehicleModalOpen] = useState(false);
+    const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null);
+
+    const [isEmiModalOpen, setEmiModalOpen] = useState(false);
+    const [editingEmi, setEditingEmi] = useState<Emi | null>(null);
+    const [installPrompt, setInstallPrompt] = useState<any>(null);
+    const [isManualInstallModalOpen, setManualInstallModalOpen] = useState(false);
+    const [isRunningStandalone, setIsRunningStandalone] = useState(false);
+    const [paymentModalData, setPaymentModalData] = useState<{emi: Emi, vehicleId: string, type: 'overdue' | 'today'} | null>(null);
+    const [settleModalData, setSettleModalData] = useState<{emi: Emi, vehicleId: string} | null>(null);
+    const [docToDelete, setDocToDelete] = useState<{ vehicleId: string; doc: Document } | null>(null);
+    const [isSettingsOpen, setSettingsOpen] = useState(false);
+
+    useEffect(() => {
+        setIsRunningStandalone(window.matchMedia('(display-mode: standalone)').matches);
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(() => {});
+            });
+        }
+    }, []);
+
+    useEffect(() => {
+        const handleBeforeInstallPrompt = (e: Event) => {
+            e.preventDefault();
+            setInstallPrompt(e);
+        };
+        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    }, []);
+
+    useEffect(() => {
+        if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+            try { Notification.requestPermission(); } catch(e) {}
+        }
+        const checkAlarms = () => {
+            setVehicles(prevVehicles => {
+                const now = new Date();
+                const nowTimestamp = now.getTime();
+                const todayYMD = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+                const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                let hasChanges = false;
+                const newVehicles = prevVehicles.map(vehicle => {
+                    let vehicleChanged = false;
+                    const newEmis = vehicle.emis.map(emi => {
+                        if (emi.paidInstallments >= emi.totalTenure) return emi;
+                        let [sY, sM, sD] = emi.startDate.split('-').map(Number);
+                        if (sY < 100) sY += 2000;
+                        const nextDueDate = new Date(sY, sM - 1 + emi.paidInstallments, sD);
+                        const nextDueDateMidnight = new Date(nextDueDate.getFullYear(), nextDueDate.getMonth(), nextDueDate.getDate());
+                        const diffTime = nextDueDateMidnight.getTime() - todayMidnight.getTime();
+                        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                        if (diffDays === 1) {
+                            let currentAlarmConfig = emi.alarmConfig;
+                            let configChanged = false;
+                            if (!currentAlarmConfig || currentAlarmConfig.date !== todayYMD) {
+                                const defaultTimeStr = currentAlarmConfig?.manualTime || settings.reminderTime;
+                                const [h, m] = defaultTimeStr.split(':').map(Number);
+                                const triggerDate = new Date(now);
+                                triggerDate.setHours(h, m, 0, 0);
+                                currentAlarmConfig = {
+                                    date: todayYMD,
+                                    nextTrigger: triggerDate.toISOString(),
+                                    snoozeCount: 0,
+                                    manualTime: currentAlarmConfig?.manualTime, 
+                                    hasRung: false,
+                                    isDismissed: false,
+                                    history: []
+                                };
+                                configChanged = true;
+                            }
+                            if (currentAlarmConfig && !currentAlarmConfig.isDismissed && !currentAlarmConfig.hasRung) {
+                                const triggerTime = new Date(currentAlarmConfig.nextTrigger).getTime();
+                                if (nowTimestamp >= triggerTime) {
+                                    const dateStr = `${String(nextDueDateMidnight.getDate()).padStart(2,'0')}/${String(nextDueDateMidnight.getMonth()+1).padStart(2,'0')}`;
+                                    const message = `Your EMI of ₹${emi.amount.toLocaleString()} for ${vehicle.make} ${vehicle.model} is due tomorrow (${dateStr}).`;
+                                    if (Notification.permission === 'granted') {
+                                        try { new Notification('EMI Reminder', { body: message, tag: emi.id }); } catch (e) {}
+                                    }
+                                    try {
+                                        const soundType = settings.soundPreference || 'subtle';
+                                        const audioUrl = SOUND_URLS[soundType as keyof typeof SOUND_URLS];
+                                        if (audioUrl) { new Audio(audioUrl).play().catch(() => {}); }
+                                    } catch (e) {}
+                                    currentAlarmConfig = { ...currentAlarmConfig, hasRung: true, history: [...currentAlarmConfig.history, { timestamp: new Date().toISOString(), action: 'ring' as const }] };
+                                    configChanged = true;
+                                }
+                            }
+                            if (configChanged) { vehicleChanged = true; return { ...emi, alarmConfig: currentAlarmConfig }; }
+                        }
+                        return emi;
+                    });
+                    if (vehicleChanged) { hasChanges = true; return { ...vehicle, emis: newEmis }; }
+                    return vehicle;
+                });
+                return hasChanges ? newVehicles : prevVehicles;
+            });
+        };
+        checkAlarms();
+        const alarmInterval = setInterval(checkAlarms, 60000);
+        return () => clearInterval(alarmInterval);
+    }, [settings.reminderTime, settings.soundPreference, setVehicles]);
+
+    const handleSnoozeAlarm = (emiId: string, vehicleId: string) => {
+        updateVehicle(vehicleId, v => {
+            const updatedEmis = v.emis.map(emi => {
+                if (emi.id === emiId && emi.alarmConfig) {
+                    const now = new Date();
+                    const newCount = emi.alarmConfig.snoozeCount + 1;
+                    let newTrigger = new Date();
+                    if (newCount === 1) { newTrigger.setHours(now.getHours() + 2); } 
+                    else if (newCount === 2) { newTrigger.setHours(17, 0, 0, 0); if (newTrigger.getTime() <= now.getTime()) { newTrigger = new Date(); newTrigger.setHours(now.getHours() + 2); } } 
+                    else { newTrigger.setHours(now.getHours() + 2); }
+                    return { ...emi, alarmConfig: { ...emi.alarmConfig!, snoozeCount: newCount, nextTrigger: newTrigger.toISOString(), hasRung: false, history: [...emi.alarmConfig!.history, { timestamp: new Date().toISOString(), action: 'snooze' as const, details: `Rescheduled to ${newTrigger.toLocaleTimeString()}` }] } };
+                }
+                return emi;
+            });
+            return { ...v, emis: updatedEmis };
+        });
+    };
+
+    const handleSetManualAlarm = (emiId: string, vehicleId: string, time: string) => {
+        updateVehicle(vehicleId, v => {
+            const updatedEmis = v.emis.map(emi => {
+                if (emi.id === emiId && emi.alarmConfig) {
+                    const [h, m] = time.split(':').map(Number);
+                    const newTrigger = new Date();
+                    newTrigger.setHours(h, m, 0, 0);
+                    return { ...emi, alarmConfig: { ...emi.alarmConfig!, manualTime: time, nextTrigger: newTrigger.toISOString(), hasRung: false, snoozeCount: 0, history: [...emi.alarmConfig!.history, { timestamp: new Date().toISOString(), action: 'manual_set' as const, details: `Set to ${time}` }] } };
+                }
+                return emi;
+            });
+            return { ...v, emis: updatedEmis };
+        });
+    };
+
+    const handleDismissAlarm = (emiId: string, vehicleId: string) => {
+        updateVehicle(vehicleId, v => {
+            const updatedEmis = v.emis.map(emi => {
+                if (emi.id === emiId && emi.alarmConfig) {
+                    return { ...emi, alarmConfig: { ...emi.alarmConfig!, isDismissed: true, history: [...emi.alarmConfig!.history, { timestamp: new Date().toISOString(), action: 'dismiss' as const }] } };
+                }
+                return emi;
+            });
+            return { ...v, emis: updatedEmis };
+        });
+    };
+
+    const handleSaveVehicle = (vehicleData: Omit<Vehicle, 'id' | 'documents' | 'emis' | 'archivedDocuments'>) => {
+        if (editingVehicle) {
+             setVehicles(prev => prev.map(v => v.id === editingVehicle.id ? { ...v, ...vehicleData } : v));
+             setEditingVehicle(null);
+        } else {
+            const newVehicle: Vehicle = { ...vehicleData, id: crypto.randomUUID(), documents: [], emis: [], archivedDocuments: [] };
+            setVehicles(prev => [...prev, newVehicle]);
+        }
+        setVehicleFormModalOpen(false);
+    };
+
+    const handleSelectVehicle = (id: string) => { setSelectedVehicleId(id); setView('vehicleDetail'); };
+    const handleViewVehicleFromDashboard = (id: string) => { setSelectedVehicleId(id); setView('vehicleDetail'); }
+    const updateVehicle = (id: string, updateFn: (vehicle: Vehicle) => Vehicle) => { setVehicles(prev => prev.map(v => v.id === id ? updateFn(v) : v)); }
+
+    const handleSaveEmi = (emiData: Omit<Emi, 'id'>, existingId?: string) => {
+        if (!selectedVehicleId) return;
+        if (existingId) { updateVehicle(selectedVehicleId, v => ({ ...v, emis: v.emis.map(e => e.id === existingId ? { ...e, ...emiData } : e) })); } 
+        else { const newEmi: Emi = { ...emiData, id: crypto.randomUUID(), paymentHistory: [] }; updateVehicle(selectedVehicleId, v => ({...v, emis: [...v.emis, newEmi]})); }
+    };
+    
+    const handleMarkEmiPaid = (emiId: string) => {
+        if (!selectedVehicleId) return;
+        updateVehicle(selectedVehicleId, v => {
+            const updatedEmis = v.emis.map(emi => {
+                if (emi.id === emiId && emi.paidInstallments < emi.totalTenure) {
+                    let [sY, sM, sD] = emi.startDate.split('-').map(Number);
+                    if (sY < 100) sY += 2000;
+                    const dueDate = new Date(sY, sM - 1 + emi.paidInstallments, sD);
+                    const today = new Date(); today.setHours(0,0,0,0);
+                    const dueDateNoTime = new Date(dueDate); dueDateNoTime.setHours(0,0,0,0);
+                    const status = today > dueDateNoTime ? 'late' : 'on-time';
+                    const newPayment: EmiPayment = { dueDate: dueDate.toISOString().split('T')[0], paidDate: today.toISOString().split('T')[0], status: status, amount: emi.amount };
+                    return { ...emi, paidInstallments: emi.paidInstallments + 1, lastPaymentDate: today.toISOString().split('T')[0], paymentHistory: [...(emi.paymentHistory || []), newPayment], alarmConfig: undefined };
+                }
+                return emi;
+            });
+            return { ...v, emis: updatedEmis };
+        });
+    };
+
+    const handleOpenEmiPaidModal = (emi: Emi, vehicleId: string, type: 'overdue' | 'today') => { setSelectedVehicleId(vehicleId); setPaymentModalData({ emi, vehicleId, type }); };
+
+    const handleConfirmOverduePayment = (paidDate: string, bounceCharges: number) => {
+        if (!paymentModalData) return;
+        const { emi, vehicleId } = paymentModalData;
+        updateVehicle(vehicleId, v => {
+            const updatedEmis = v.emis.map(e => {
+                if (e.id === emi.id) {
+                    let [sY, sM, sD] = e.startDate.split('-').map(Number);
+                    if (sY < 100) sY += 2000;
+                    const dueDate = new Date(sY, sM - 1 + e.paidInstallments, sD);
+                    const newPayment: EmiPayment = { dueDate: dueDate.toISOString().split('T')[0], paidDate: paidDate, status: 'late', amount: e.amount, bounceCharges: bounceCharges > 0 ? bounceCharges : undefined };
+                    return { ...e, paidInstallments: e.paidInstallments + 1, lastPaymentDate: paidDate, extraCharges: (e.extraCharges || 0) + bounceCharges, paymentHistory: [...(e.paymentHistory || []), newPayment], alarmConfig: undefined };
+                }
+                return e;
+            });
+            return { ...v, emis: updatedEmis };
+        });
+        setPaymentModalData(null);
+    };
+    
+    const handleConfirmTodayPayment = () => {
+        if (!paymentModalData) return;
+        const { emi, vehicleId } = paymentModalData;
+        updateVehicle(vehicleId, v => {
+            const updatedEmis = v.emis.map(e => {
+                if (e.id === emi.id) {
+                    const today = new Date().toISOString().split('T')[0];
+                    let [sY, sM, sD] = e.startDate.split('-').map(Number);
+                    if (sY < 100) sY += 2000;
+                    const dueDate = new Date(sY, sM - 1 + e.paidInstallments, sD);
+                    const newPayment: EmiPayment = { dueDate: dueDate.toISOString().split('T')[0], paidDate: today, status: 'on-time', amount: e.amount };
+                    return { ...e, paidInstallments: e.paidInstallments + 1, lastPaymentDate: today, paymentHistory: [...(e.paymentHistory || []), newPayment], alarmConfig: undefined };
+                }
+                return e;
+            });
+            return { ...v, emis: updatedEmis };
+        });
+        setPaymentModalData(null);
+    };
+
+    const handleOpenSettleModal = (emi: Emi) => { if (!selectedVehicleId) return; setSettleModalData({ emi, vehicleId: selectedVehicleId }); };
+
+    const handleConfirmSettleLoan = (settleAmount: number, settleDate: string) => {
+        if (!settleModalData) return;
+        const { emi, vehicleId } = settleModalData;
+        updateVehicle(vehicleId, v => {
+            const updatedEmis = v.emis.map(e => {
+                if (e.id === emi.id) { return { ...e, paidInstallments: e.totalTenure, settlementDetails: { amount: settleAmount, date: settleDate }, alarmConfig: undefined }; }
+                return e;
+            });
+            return { ...v, emis: updatedEmis };
+        });
+        setSettleModalData(null);
+    };
+
+    const handleAddDoc = (docData: Omit<Document, 'id'>, replacingDocId?: string) => {
+        if (!selectedVehicleId) return;
+        updateVehicle(selectedVehicleId, v => {
+            const newDoc = { ...docData, id: crypto.randomUUID() };
+            let updatedDocs = [...v.documents];
+            let updatedArchivedDocs = [...(v.archivedDocuments || [])];
+            const docToArchive = updatedDocs.find(d => d.id === replacingDocId || d.name === newDoc.name);
+            if (docToArchive) { updatedArchivedDocs.push(docToArchive); updatedDocs = updatedDocs.filter(d => d.id !== docToArchive.id); }
+            updatedDocs.push(newDoc);
+            updatedDocs.sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
+            return { ...v, documents: updatedDocs, archivedDocuments: updatedArchivedDocs };
+        });
+    };
+
+    const handleUpdateDoc = (docId: string, docData: Omit<Document, 'id'>) => {
+        if (!selectedVehicleId) return;
+        updateVehicle(selectedVehicleId, v => {
+            const updatedDocs = v.documents.map(d => d.id === docId ? { ...d, ...docData } : d);
+            updatedDocs.sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
+            return { ...v, documents: updatedDocs };
+        });
+    };
+
+    const handleDeleteDoc = (vehicleId: string, docId: string) => { updateVehicle(vehicleId, v => ({ ...v, documents: v.documents.filter(d => d.id !== docId) })); };
+    
+    const handleSnoozeItem = (itemId: string, minutes?: number) => {
+        const now = new Date();
+        let snoozeUntil;
+        if (minutes) { snoozeUntil = new Date(now.getTime() + minutes * 60 * 1000); } 
+        else { snoozeUntil = new Date(); snoozeUntil.setDate(snoozeUntil.getDate() + 1); snoozeUntil.setHours(8, 0, 0, 0); }
+        setSnoozed(prev => ({ ...prev, [itemId]: snoozeUntil.getTime() }));
+    };
+
+    const handleEditVehicle = () => { if (selectedVehicleId) { const v = vehicles.find(veh => veh.id === selectedVehicleId); if (v) { setEditingVehicle(v); setVehicleFormModalOpen(true); } } };
+    const handleDeleteVehicleClick = () => { if (selectedVehicleId) { const v = vehicles.find(veh => veh.id === selectedVehicleId); if (v) { setVehicleToDelete(v); setDeleteVehicleModalOpen(true); } } };
+
+    const handleConfirmDeleteVehicle = (reason: string) => {
+        if (!vehicleToDelete) return;
+        setVehicles(prev => prev.filter(v => v.id !== vehicleToDelete.id));
+        setVehicleToDelete(null); setDeleteVehicleModalOpen(false); setSelectedVehicleId(null); setView('vehicleList');
+    };
+    
+    const handleExportData = () => {
+        const data = { vehicles, snoozed, settings };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a'); link.href = url; link.download = `due_guardian_backup_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    };
+
+    const handleImportData = (file: File) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = JSON.parse(e.target?.result as string);
+                if (data.vehicles && Array.isArray(data.vehicles)) {
+                    if (confirm('This will overwrite your current data. Are you sure?')) {
+                        setVehicles(data.vehicles);
+                        if (data.snoozed) setSnoozed(data.snoozed);
+                        if (data.settings) setSettings(data.settings);
+                        setSettingsOpen(false);
+                        alert('Data restored successfully!');
+                    }
+                } else { alert('Invalid backup file.'); }
+            } catch (err) { alert('Error parsing backup file.'); console.error(err); }
+        };
+        reader.readAsText(file);
+    };
+
+    const selectedVehicle = vehicles.find(v => v.id === selectedVehicleId);
+
+    const renderContent = () => {
+        switch (view) {
+            case 'vehicleList': return <VehicleList vehicles={vehicles} onSelectVehicle={handleSelectVehicle} onAddAssetClick={() => { setAddModalMode('asset'); setVehicleFormModalOpen(true); setEditingVehicle(null); }} onAddLoanClick={() => { setAddModalMode('loan'); setVehicleFormModalOpen(true); setEditingVehicle(null); }} />;
+            case 'vehicleDetail':
+                if (selectedVehicle) {
+                    return <VehicleDetail vehicle={selectedVehicle} onBack={() => setView('vehicleList')} onAddDoc={handleAddDoc} onUpdateDoc={handleUpdateDoc} onDeleteDoc={(doc) => setDocToDelete({ vehicleId: selectedVehicle.id, doc })} onMarkEmiPaid={handleMarkEmiPaid} onOpenSettleModal={handleOpenSettleModal} onEditEmiClick={(emi) => { setEditingEmi(emi); setEmiModalOpen(true); }} onEditVehicle={handleEditVehicle} onDeleteVehicle={handleDeleteVehicleClick} />;
+                }
+                setView('vehicleList'); return null;
+            case 'reports': return <Reports vehicles={vehicles} />;
+            case 'dashboard': default: return <Dashboard vehicles={vehicles} onViewVehicle={handleViewVehicleFromDashboard} snoozed={snoozed} onSnoozeItem={handleSnoozeItem} onMarkEmiPaid={handleOpenEmiPaidModal} onSnoozeAlarm={handleSnoozeAlarm} onSetManualAlarm={handleSetManualAlarm} onDismissAlarm={handleDismissAlarm} />;
+        }
+    };
+    
+    return (
+        <div className="min-h-screen flex flex-col pb-16 bg-slate-900">
+            <header className="bg-slate-800 shadow-md sticky top-0 z-10">
+                 <div className="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
+                    <div className="flex items-center space-x-2">
+                        <svg className="w-8 h-8 text-indigo-400" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect width="512" height="512" rx="96" fill="#1E293B" fillOpacity="0"/>
+                            <path d="M256 74.6667L96 154.667V256C96 364.533 165.76 430.4 256 448C346.24 430.4 416 364.533 416 256V154.667L256 74.6667Z" stroke="currentColor" strokeWidth="24" strokeLinecap="round" strokeLinejoin="round"/>
+                            <rect x="181" y="200" width="150" height="120" rx="10" stroke="white" strokeWidth="16"/>
+                            <path d="M181 240H331" stroke="white" strokeWidth="16" strokeLinecap="round"/>
+                            <path d="M221 180V220" stroke="white" strokeWidth="16" strokeLinecap="round"/>
+                            <path d="M291 180V220" stroke="white" stroke-width="16" strokeLinecap="round"/>
+                        </svg>
+                        <h1 className="text-xl font-bold text-white">Due Guardian</h1>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {isSyncing ? (
+                            <span className="text-xs text-green-400 animate-pulse">Syncing...</span>
+                        ) : (
+                            <span className="text-xs text-slate-400 font-medium">{displayUsername}</span>
+                        )}
+                        <button onClick={() => setSettingsOpen(true)} className="p-2 text-slate-400 hover:text-white rounded-full hover:bg-slate-700 transition-colors" title="Settings">
+                            <SettingsIcon className="w-6 h-6" />
+                        </button>
+                    </div>
+                 </div>
+            </header>
+
+            <main className="flex-grow max-w-4xl mx-auto w-full">
+                {renderContent()}
+            </main>
+
+            <nav className="bg-slate-800 shadow-t-md fixed bottom-0 z-10 border-t border-slate-700 w-full">
+                <div className="max-w-4xl mx-auto px-4 h-16 flex justify-around items-center">
+                    <button onClick={() => setView('dashboard')} className={`flex flex-col items-center space-y-1 ${view === 'dashboard' ? 'text-indigo-400' : 'text-slate-400 hover:text-white'}`}>
+                        <DashboardIcon className="w-6 h-6" />
+                        <span className="text-xs font-medium">Dashboard</span>
+                    </button>
+                    
+                    <button onClick={() => setView('reports')} className={`flex flex-col items-center space-y-1 ${view === 'reports' ? 'text-indigo-400' : 'text-slate-400 hover:text-white'}`}>
+                        <EyeIcon className="w-8 h-8" />
+                        <span className="text-xs font-medium">Reports</span>
+                    </button>
+
+                    <button onClick={() => setView('vehicleList')} className={`flex flex-col items-center space-y-1 ${view === 'vehicleList' || view === 'vehicleDetail' ? 'text-indigo-400' : 'text-slate-400 hover:text-white'}`}>
+                        <VehicleIcon className="w-6 h-6" />
+                        <span className="text-xs font-medium">Items</span>
+                    </button>
+                </div>
+            </nav>
+
+            <VehicleFormModal isOpen={isVehicleFormModalOpen} onClose={() => { setVehicleFormModalOpen(false); setEditingVehicle(null); }} onSave={handleSaveVehicle} mode={addModalMode} initialData={editingVehicle} />
+            {selectedVehicleId && <EmiFormModal isOpen={isEmiModalOpen} onClose={() => { setEmiModalOpen(false); setEditingEmi(null); }} onSubmit={handleSaveEmi} initialData={editingEmi} vehicleType={selectedVehicle?.type} />}
+            {isDeleteVehicleModalOpen && vehicleToDelete && <DeleteVehicleModal isOpen={isDeleteVehicleModalOpen} onClose={() => { setDeleteVehicleModalOpen(false); setVehicleToDelete(null); }} onConfirm={handleConfirmDeleteVehicle} vehicleName={`${vehicleToDelete.make} ${vehicleToDelete.model}`} />}
+            <SettingsModal isOpen={isSettingsOpen} onClose={() => setSettingsOpen(false)} reminderTime={settings.reminderTime} soundPreference={settings.soundPreference || 'subtle'} onTimeChange={(time) => setSettings({ ...settings, reminderTime: time })} onSoundChange={(sound) => setSettings({ ...settings, soundPreference: sound })} onLogout={onLogout} onExport={handleExportData} onImport={handleImportData} />
+            <ResetPasswordModal isOpen={!!isRecoveryMode} onClose={() => onResetPasswordSuccess && onResetPasswordSuccess()} />
+            {!isRunningStandalone && installPrompt && <div className="fixed bottom-20 right-4 z-50"><button onClick={() => installPrompt.prompt()} className="bg-indigo-600 text-white font-bold py-2 px-4 rounded-full shadow-lg flex items-center space-x-2 animate-pulse"><DownloadIcon className="w-5 h-5" /><span>Install App</span></button></div>}
+            <AddToHomeScreenPrompt />
+            <ManualInstallModal isOpen={isManualInstallModalOpen} onClose={() => setManualInstallModalOpen(false)} />
+            <OverduePaymentModal isOpen={paymentModalData?.type === 'overdue'} onClose={() => setPaymentModalData(null)} onSubmit={handleConfirmOverduePayment} />
+            <TodayPaymentConfirmationModal isOpen={paymentModalData?.type === 'today'} onClose={() => setPaymentModalData(null)} onConfirm={handleConfirmTodayPayment} />
+            {settleModalData && <SettleLoanModal isOpen={!!settleModalData} onClose={() => setSettleModalData(null)} onSubmit={handleConfirmSettleLoan} />}
+            <ConfirmationModal isOpen={!!docToDelete} onClose={() => setDocToDelete(null)} onConfirm={() => { if (docToDelete) { handleDeleteDoc(docToDelete.vehicleId, docToDelete.doc.id); setDocToDelete(null); } }} title="Delete Document">Are you sure you want to permanently delete "{docToDelete?.doc.name}"? This action cannot be undone.</ConfirmationModal>
+        </div>
+    );
+};
+
+const App: React.FC = () => {
+    const [session, setSession] = useState<any>(null);
+    const [isRecoveryMode, setIsRecoveryMode] = useState(false);
+    const [isLoading, setIsLoading] = useState(true); // Prevent white flash
+
+    useEffect(() => {
+        if (supabase) {
+            supabase.auth.getSession().then(({ data: { session } }) => {
+                setSession(session);
+                setIsLoading(false);
+            });
+
+            const {
+                data: { subscription },
+            } = supabase.auth.onAuthStateChange((event, session) => {
+                if (event === 'PASSWORD_RECOVERY') {
+                    setIsRecoveryMode(true);
+                }
+                setSession(session);
+                setIsLoading(false);
+            });
+
+            return () => subscription.unsubscribe();
+        } else {
+            setIsLoading(false);
+        }
+    }, []);
+
+    if (isLoading) {
+        return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-indigo-400">Loading...</div>;
+    }
+
+    // If session exists, show app. Otherwise show Auth (Login/Signup).
+    if (!session) {
+        return <AuthScreen onLogin={() => {}} />;
+    }
+
+    return (
+        <AuthenticatedApp 
+            key={session.user.id} 
+            currentUser={session.user.email || 'user'} 
+            userId={session.user.id}
+            onLogout={() => {
+                setIsRecoveryMode(false);
+                supabase?.auth.signOut();
+            }}
+            isRecoveryMode={isRecoveryMode}
+            onResetPasswordSuccess={() => setIsRecoveryMode(false)}
+        />
+    );
 };
 
 export default App;
