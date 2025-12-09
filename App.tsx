@@ -1073,4 +1073,734 @@ const OverduePaymentModal: React.FC<{
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Log Overdue Payment">
-            <div className="space-y
+            <div className="space-y-4">
+                <div>
+                    <label className="text-sm text-slate-400 mb-1 block">Payment Date</label>
+                    <input type="date" value={paidDate} onChange={e => setPaidDate(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" max={new Date().toISOString().split('T')[0]} />
+                </div>
+                <div>
+                     <label className="text-sm text-slate-400 mb-1 block">Bounce/Late Charges (Optional)</label>
+                     <input type="number" placeholder="Enter amount if any" value={bounceCharges} onChange={e => setBounceCharges(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" />
+                </div>
+                <button onClick={handleSubmit} className="w-full bg-green-600 hover:bg-green-700 p-2 rounded text-white font-bold mt-4">Confirm Payment</button>
+            </div>
+        </Modal>
+    );
+};
+
+const AuthScreen: React.FC = () => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [isLogin, setIsLogin] = useState(true);
+    const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState<{type: 'error' | 'success', text: string} | null>(null);
+    const [showOtpInput, setShowOtpInput] = useState(false);
+    const [otp, setOtp] = useState('');
+    const [showForgotPassword, setShowForgotPassword] = useState(false);
+
+    const handleAuth = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!supabase) return;
+        setLoading(true);
+        setMessage(null);
+
+        try {
+            if (showForgotPassword) {
+                const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                    redirectTo: window.location.href, // Redirect back to app
+                });
+                if (error) throw error;
+                setMessage({ type: 'success', text: 'Password reset link sent to your email.' });
+                setLoading(false);
+                return;
+            }
+
+            if (isLogin) {
+                const { error } = await supabase.auth.signInWithPassword({ email, password });
+                if (error) {
+                    if (error.message.includes("Email not confirmed")) {
+                        // Attempt to resend logic or guide user
+                        throw new Error("Please verify your email address before logging in.");
+                    }
+                    throw error;
+                }
+            } else {
+                const { error, data } = await supabase.auth.signUp({ email, password });
+                if (error) throw error;
+                
+                // Check if session is already established (Direct Login enabled)
+                if (data.session) {
+                    // Logged in immediately!
+                    setMessage({ type: 'success', text: 'Account created and logged in!' });
+                } else if (data.user && data.user.identities && data.user.identities.length === 0) {
+                     setMessage({ type: 'error', text: 'This email is already registered. Please log in.' });
+                } else {
+                    // User created but needs verification.
+                    // IMPORTANT: You asked to switch to OTP or disable verification.
+                    // If Supabase sends a link by default, we can't force OTP unless configured.
+                    // However, we can TRY to show OTP input if you configured SMTP. 
+                    // Since we can't know config, we'll assume Direct Login failed and ask for OTP/Link.
+                    setMessage({ type: 'success', text: 'Registration successful! If you received a code, enter it below.' });
+                    setShowOtpInput(true);
+                }
+            }
+        } catch (error: any) {
+            let msg = error.message;
+            if (msg.includes("rate limit") || msg.includes("security purposes")) {
+                msg = "Please wait a few seconds before trying again.";
+            }
+            if (msg.includes("User already registered")) {
+                msg = "This email is already registered. Please log in.";
+            }
+            setMessage({ type: 'error', text: msg });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleOtpVerification = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!supabase) return;
+        setLoading(true);
+        try {
+             const { error } = await supabase.auth.verifyOtp({
+                email,
+                token: otp,
+                type: 'signup'
+            });
+            if (error) throw error;
+             setMessage({ type: 'success', text: 'Verified successfully!' });
+        } catch (error: any) {
+            setMessage({ type: 'error', text: error.message });
+        } finally {
+             setLoading(false);
+        }
+    };
+
+    const toggleMode = () => {
+        setIsLogin(!isLogin);
+        setMessage(null);
+        setShowOtpInput(false);
+        setShowForgotPassword(false);
+    };
+
+    return (
+        <div className="flex flex-col items-center justify-center min-h-screen p-4">
+             <div className="bg-slate-800 p-8 rounded-lg shadow-xl w-full max-w-md border border-slate-700">
+                <h1 className="text-3xl font-bold text-center text-indigo-400 mb-2">Due Guardian</h1>
+                <p className="text-center text-slate-400 mb-8">{showForgotPassword ? 'Reset Password' : (showOtpInput ? 'Enter Code' : (isLogin ? 'Welcome Back' : 'Create Account'))}</p>
+                
+                {message && (
+                    <div className={`p-3 rounded mb-4 text-sm ${message.type === 'error' ? 'bg-red-900/50 text-red-200 border border-red-500' : 'bg-green-900/50 text-green-200 border border-green-500'}`}>
+                        {message.text}
+                    </div>
+                )}
+
+                {showOtpInput ? (
+                    <form onSubmit={handleOtpVerification} className="space-y-4">
+                         <input 
+                            type="text" 
+                            placeholder="Enter 6-digit Code" 
+                            value={otp} 
+                            onChange={e => setOtp(e.target.value)} 
+                            className="w-full p-3 bg-slate-700 border border-slate-600 rounded text-white" 
+                            required 
+                        />
+                         <button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 p-3 rounded text-white font-bold transition-colors">
+                            {loading ? 'Verifying...' : 'Verify & Login'}
+                        </button>
+                        <button type="button" onClick={() => setShowOtpInput(false)} className="w-full text-sm text-slate-400 hover:text-white mt-2">Back</button>
+                    </form>
+                ) : (
+                    <form onSubmit={handleAuth} className="space-y-4">
+                        <input 
+                            type="email" 
+                            placeholder="Email Address" 
+                            value={email} 
+                            onChange={e => setEmail(e.target.value)} 
+                            className="w-full p-3 bg-slate-700 border border-slate-600 rounded text-white" 
+                            required 
+                        />
+                         {!showForgotPassword && (
+                             <input 
+                                type="password" 
+                                placeholder="Password" 
+                                value={password} 
+                                onChange={e => setPassword(e.target.value)} 
+                                className="w-full p-3 bg-slate-700 border border-slate-600 rounded text-white" 
+                                required 
+                            />
+                         )}
+                        
+                        <button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 p-3 rounded text-white font-bold transition-colors">
+                            {loading ? 'Processing...' : (showForgotPassword ? 'Send Reset Link' : (isLogin ? 'Login' : 'Sign Up'))}
+                        </button>
+                    </form>
+                )}
+
+                {!showOtpInput && (
+                    <div className="mt-6 text-center text-sm space-y-2">
+                        {showForgotPassword ? (
+                            <button onClick={() => setShowForgotPassword(false)} className="text-indigo-400 hover:text-indigo-300">Back to Login</button>
+                        ) : (
+                            <>
+                                <p className="text-slate-400">
+                                    {isLogin ? "Don't have an account? " : "Already have an account? "}
+                                    <button onClick={toggleMode} className="text-indigo-400 hover:text-indigo-300 font-bold">
+                                        {isLogin ? 'Sign Up' : 'Login'}
+                                    </button>
+                                </p>
+                                {isLogin && <button onClick={() => setShowForgotPassword(true)} className="text-slate-500 hover:text-slate-300 text-xs">Forgot Password?</button>}
+                            </>
+                        )}
+                    </div>
+                )}
+             </div>
+             
+             {!isLogin && !showOtpInput && (
+                 <div className="mt-8 text-center max-w-xs text-xs text-slate-500">
+                     <p className="font-semibold text-slate-400 mb-1">Developer Note:</p>
+                     <p>If "Confirm Email" is enabled in Supabase, you must verify your email before logging in. Disable it in Supabase Auth settings for instant access.</p>
+                 </div>
+             )}
+        </div>
+    );
+}
+
+const App: React.FC = () => {
+  // Use LocalStorage as a fallback or cache, but Supabase is primary
+  const [vehicles, setVehicles] = useLocalStorage<Vehicle[]>('vehicles', []);
+  const [snoozed, setSnoozed] = useLocalStorage<Record<string, number>>('snoozed', {});
+  const [session, setSession] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState<View>('dashboard');
+  const [activeVehicleId, setActiveVehicleId] = useState<string | null>(null);
+  
+  // Modals
+  const [isVehicleModalOpen, setVehicleModalOpen] = useState(false);
+  const [vehicleModalMode, setVehicleModalMode] = useState<'asset' | 'loan'>('asset');
+  const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
+  const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteVehicleId, setDeleteVehicleId] = useState<string | null>(null);
+  const [isInstallModalOpen, setInstallModalOpen] = useState(false);
+  const [editingEmi, setEditingEmi] = useState<{emi: Emi | null, vehicleType: string} | null>(null);
+  const [isOverdueModalOpen, setOverdueModalOpen] = useState(false);
+  const [overdueEmiTarget, setOverdueEmiTarget] = useState<{emiId: string, vehicleId: string} | null>(null);
+  const [resetPasswordMode, setResetPasswordMode] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+
+  // --- Auth & Data Sync ---
+  useEffect(() => {
+    if (!supabase) {
+        setLoading(false);
+        return;
+    }
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+      if (session) fetchData(session.user.id);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setSession(session);
+      if (session) {
+          fetchData(session.user.id);
+      }
+      if (_event === 'PASSWORD_RECOVERY') {
+          setResetPasswordMode(true);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchData = async (userId: string) => {
+      if (!supabase) return;
+      // Fetch user data
+      const { data, error } = await supabase
+        .from('user_data')
+        .select('vehicles, snoozed')
+        .eq('user_id', userId)
+        .single();
+    
+      if (data) {
+          if (data.vehicles) setVehicles(data.vehicles);
+          if (data.snoozed) setSnoozed(data.snoozed);
+      }
+  };
+
+  const saveData = async (newVehicles: Vehicle[], newSnoozed: Record<string, number>) => {
+      if (!supabase || !session) return;
+      
+      // Update local state first for instant UI
+      setVehicles(newVehicles);
+      setSnoozed(newSnoozed);
+
+      // Background sync
+      const { error } = await supabase
+        .from('user_data')
+        .upsert({ 
+            user_id: session.user.id, 
+            vehicles: newVehicles, 
+            snoozed: newSnoozed,
+            updated_at: new Date().toISOString()
+        });
+      
+      if (error) console.error("Sync Error", error);
+  };
+
+  // --- Actions ---
+
+  const handleAddVehicle = (data: Omit<Vehicle, 'id' | 'documents' | 'emis' | 'archivedDocuments'>) => {
+      const newVehicle: Vehicle = {
+          ...data,
+          id: crypto.randomUUID(),
+          documents: [],
+          emis: [],
+          archivedDocuments: []
+      };
+      
+      if (editingVehicle) {
+          const updated = vehicles.map(v => v.id === editingVehicle.id ? { ...v, ...data } : v);
+          saveData(updated, snoozed);
+      } else {
+          saveData([...vehicles, newVehicle], snoozed);
+      }
+      setEditingVehicle(null);
+  };
+
+  const handleDeleteVehicle = (reason: string) => {
+      if (!deleteVehicleId) return;
+      const updated = vehicles.filter(v => v.id !== deleteVehicleId);
+      // Ideally log the deletion reason somewhere, for now just delete
+      saveData(updated, snoozed);
+      setDeleteModalOpen(false);
+      if (activeVehicleId === deleteVehicleId) {
+          setView('vehicleList');
+          setActiveVehicleId(null);
+      }
+  };
+
+  const handleAddEmi = (emiData: Omit<Emi, 'id'>, existingId?: string) => {
+      if (!activeVehicleId) return;
+      const updatedVehicles = vehicles.map(v => {
+          if (v.id !== activeVehicleId) return v;
+          let newEmis = [...v.emis];
+          if (existingId) {
+              newEmis = newEmis.map(e => e.id === existingId ? { ...e, ...emiData } : e);
+          } else {
+              newEmis.push({ ...emiData, id: crypto.randomUUID(), paidInstallments: emiData.paidInstallments || 0 });
+          }
+          return { ...v, emis: newEmis };
+      });
+      saveData(updatedVehicles, snoozed);
+  };
+
+  const handleMarkEmiPaid = (emi: Emi, vehicleId: string, category: 'overdue' | 'today') => {
+      if (category === 'overdue') {
+          // Open modal to capture actual payment date for overdue items
+          setOverdueEmiTarget({ emiId: emi.id, vehicleId });
+          setOverdueModalOpen(true);
+      } else {
+          // For Today/Future, assume paid today
+          confirmEmiPayment(vehicleId, emi.id, new Date().toISOString().split('T')[0], 0);
+      }
+  };
+
+  const confirmEmiPayment = (vehicleId: string, emiId: string, paidDate: string, bounceCharges: number) => {
+        const updatedVehicles = vehicles.map(v => {
+          if (v.id !== vehicleId) return v;
+          const newEmis = v.emis.map(e => {
+              if (e.id !== emiId) return e;
+              
+              const history = e.paymentHistory || [];
+              
+              // Determine due date for this installment
+              let [sY, sM, sD] = e.startDate.split('-').map(Number);
+              if (sY < 100) sY += 2000;
+              const dueDateObj = new Date(sY, sM - 1 + e.paidInstallments, sD);
+              const dueDateStr = `${dueDateObj.getFullYear()}-${String(dueDateObj.getMonth()+1).padStart(2,'0')}-${String(dueDateObj.getDate()).padStart(2,'0')}`;
+              
+              const isLate = new Date(paidDate) > new Date(dueDateStr);
+              
+              const newPayment: EmiPayment = {
+                  dueDate: dueDateStr,
+                  paidDate: paidDate,
+                  status: isLate ? 'late' : 'on-time',
+                  amount: e.amount,
+                  bounceCharges: bounceCharges > 0 ? bounceCharges : undefined
+              };
+
+              // Clear Alarm config if it was ringing
+              const newAlarmConfig = e.alarmConfig ? { ...e.alarmConfig, hasRung: false, isDismissed: false } : undefined;
+
+              return { 
+                  ...e, 
+                  paidInstallments: e.paidInstallments + 1,
+                  extraCharges: (e.extraCharges || 0) + bounceCharges,
+                  paymentHistory: [...history, newPayment],
+                  alarmConfig: newAlarmConfig
+              };
+          });
+          return { ...v, emis: newEmis };
+      });
+      saveData(updatedVehicles, snoozed);
+      setOverdueModalOpen(false);
+      setOverdueEmiTarget(null);
+  };
+
+  const handleAddDoc = (docData: Omit<Document, 'id'>, replacingDocId?: string) => {
+      if (!activeVehicleId) return;
+      const updatedVehicles = vehicles.map(v => {
+          if (v.id !== activeVehicleId) return v;
+          let newDocs = [...v.documents];
+          let archived = [...v.archivedDocuments];
+
+          if (replacingDocId) {
+              const oldDoc = newDocs.find(d => d.id === replacingDocId);
+              if (oldDoc) {
+                  archived.push(oldDoc);
+                  newDocs = newDocs.filter(d => d.id !== replacingDocId);
+              }
+          }
+          newDocs.push({ ...docData, id: crypto.randomUUID() });
+          return { ...v, documents: newDocs, archivedDocuments: archived };
+      });
+      saveData(updatedVehicles, snoozed);
+  };
+
+  const handleUpdateDoc = (docId: string, docData: Omit<Document, 'id'>) => {
+      if (!activeVehicleId) return;
+      const updatedVehicles = vehicles.map(v => {
+          if (v.id !== activeVehicleId) return v;
+          const newDocs = v.documents.map(d => d.id === docId ? { ...d, ...docData } : d);
+          return { ...v, documents: newDocs };
+      });
+      saveData(updatedVehicles, snoozed);
+  };
+
+  const handleDeleteDoc = (doc: Document) => {
+      if (!activeVehicleId || !window.confirm(`Delete ${doc.name}?`)) return;
+      const updatedVehicles = vehicles.map(v => {
+          if (v.id !== activeVehicleId) return v;
+          return { ...v, documents: v.documents.filter(d => d.id !== doc.id) };
+      });
+      saveData(updatedVehicles, snoozed);
+  };
+
+  const handleSnooze = (itemId: string, minutes: number = 24 * 60) => { // Default 1 day
+      const snoozeUntil = Date.now() + minutes * 60 * 1000;
+      const newSnoozed = { ...snoozed, [itemId]: snoozeUntil };
+      saveData(vehicles, newSnoozed);
+  };
+
+  const handleSnoozeAlarm = (emiId: string, vehicleId: string) => {
+      const updatedVehicles = vehicles.map(v => {
+          if (v.id !== vehicleId) return v;
+          return {
+              ...v,
+              emis: v.emis.map(e => {
+                  if (e.id !== emiId) return e;
+                  const config = e.alarmConfig || {
+                       date: new Date().toISOString().split('T')[0],
+                       nextTrigger: new Date().toISOString(),
+                       snoozeCount: 0,
+                       hasRung: false,
+                       isDismissed: false,
+                       history: []
+                  };
+                  // Snooze for 10 minutes
+                  const nextTime = new Date();
+                  nextTime.setMinutes(nextTime.getMinutes() + 10);
+                  
+                  return {
+                      ...e,
+                      alarmConfig: {
+                          ...config,
+                          nextTrigger: nextTime.toISOString(),
+                          snoozeCount: config.snoozeCount + 1,
+                          hasRung: false,
+                          history: [...config.history, { timestamp: new Date().toISOString(), action: 'snooze' as const }]
+                      }
+                  };
+              })
+          };
+      });
+      saveData(updatedVehicles, snoozed);
+  };
+
+  const handleSetManualAlarm = (emiId: string, vehicleId: string, time: string) => {
+      const updatedVehicles = vehicles.map(v => {
+          if (v.id !== vehicleId) return v;
+          return {
+              ...v,
+              emis: v.emis.map(e => {
+                  if (e.id !== emiId) return e;
+                   const [hours, minutes] = time.split(':').map(Number);
+                   const nextTrigger = new Date();
+                   nextTrigger.setHours(hours, minutes, 0, 0);
+                   
+                   // If time is past, set for tomorrow? No, user usually means today if they set it manually. 
+                   // But if it's strictly overdue, maybe. Let's assume today.
+                   
+                   const config = e.alarmConfig || {
+                       date: new Date().toISOString().split('T')[0],
+                       nextTrigger: new Date().toISOString(),
+                       snoozeCount: 0,
+                       hasRung: false,
+                       isDismissed: false,
+                       history: []
+                  };
+
+                  return {
+                      ...e,
+                      alarmConfig: {
+                          ...config,
+                          manualTime: time,
+                          nextTrigger: nextTrigger.toISOString(),
+                          hasRung: false,
+                          isDismissed: false,
+                          history: [...config.history, { timestamp: new Date().toISOString(), action: 'manual_set' as const, details: time }]
+                      }
+                  };
+              })
+          };
+      });
+      saveData(updatedVehicles, snoozed);
+  };
+
+  const handleDismissAlarm = (emiId: string, vehicleId: string) => {
+      const updatedVehicles = vehicles.map(v => {
+          if (v.id !== vehicleId) return v;
+          return {
+              ...v,
+              emis: v.emis.map(e => {
+                  if (e.id !== emiId) return e;
+                  if (!e.alarmConfig) return e;
+                  return {
+                      ...e,
+                      alarmConfig: {
+                          ...e.alarmConfig,
+                          isDismissed: true,
+                          hasRung: false,
+                          history: [...e.alarmConfig.history, { timestamp: new Date().toISOString(), action: 'dismiss' as const }]
+                      }
+                  };
+              })
+          };
+      });
+      saveData(updatedVehicles, snoozed);
+  };
+  
+  const handleSettleLoan = (emi: Emi) => {
+      if (!activeVehicleId || !window.confirm("Are you sure you want to settle this loan? This will mark all remaining EMIs as paid.")) return;
+      
+      const settleDate = new Date().toISOString().split('T')[0];
+      // Amount remaining
+      const remaining = (emi.totalTenure - emi.paidInstallments) * emi.amount;
+      
+      const updatedVehicles = vehicles.map(v => {
+          if (v.id !== activeVehicleId) return v;
+          return {
+              ...v,
+              emis: v.emis.map(e => {
+                  if (e.id !== emi.id) return e;
+                  return {
+                      ...e,
+                      paidInstallments: e.totalTenure, // Mark full
+                      settlementDetails: {
+                          amount: remaining,
+                          date: settleDate
+                      }
+                  };
+              })
+          };
+      });
+      saveData(updatedVehicles, snoozed);
+  };
+
+  const handleUpdatePassword = async () => {
+      if (!supabase) return;
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+          alert("Error updating password: " + error.message);
+      } else {
+          alert("Password updated successfully!");
+          setResetPasswordMode(false);
+          setNewPassword('');
+      }
+  };
+
+
+  const activeVehicle = vehicles.find(v => v.id === activeVehicleId);
+
+  const getUsername = () => {
+      if (!session || !session.user || !session.user.email) return 'User';
+      return session.user.email.split('@')[0];
+  };
+
+  if (loading) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading...</div>;
+
+  if (!session) return <AuthScreen />;
+
+  return (
+    <div className="min-h-screen bg-slate-900 pb-20 md:pb-0">
+        <header className="bg-slate-800 p-4 sticky top-0 z-20 border-b border-slate-700 flex justify-between items-center shadow-lg">
+            <div className="flex items-center space-x-2" onClick={() => { setView('dashboard'); setActiveVehicleId(null); }}>
+                <div className="bg-indigo-600 p-2 rounded-lg">
+                    <DashboardIcon className="w-6 h-6 text-white" />
+                </div>
+                <h1 className="text-xl font-bold text-white tracking-tight">Due Guardian</h1>
+            </div>
+            <div className="flex items-center space-x-3">
+                 <button onClick={() => setInstallModalOpen(true)} className="text-slate-400 hover:text-white" title="Install App">
+                    <DownloadIcon className="w-5 h-5" />
+                </button>
+                 <span className="text-xs font-mono text-emerald-400 bg-emerald-900/30 px-2 py-1 rounded hidden sm:inline-block">
+                    {getUsername()}
+                </span>
+                <button 
+                    onClick={() => supabase?.auth.signOut()}
+                    className="p-2 bg-slate-700 hover:bg-slate-600 rounded-full transition-colors text-slate-300 hover:text-white"
+                    title="Sign Out"
+                >
+                    <LogoutIcon className="w-5 h-5" />
+                </button>
+            </div>
+        </header>
+
+        <main className="max-w-7xl mx-auto">
+            {resetPasswordMode && (
+                <div className="p-4 m-4 bg-slate-800 border border-indigo-500 rounded-lg">
+                    <h3 className="text-lg font-bold text-white mb-2">Set New Password</h3>
+                    <div className="flex gap-2">
+                        <input 
+                            type="password" 
+                            placeholder="New Password" 
+                            value={newPassword}
+                            onChange={e => setNewPassword(e.target.value)}
+                            className="flex-1 p-2 bg-slate-700 rounded text-white"
+                        />
+                        <button onClick={handleUpdatePassword} className="bg-indigo-600 text-white px-4 py-2 rounded font-bold">Update</button>
+                        <button onClick={() => setResetPasswordMode(false)} className="bg-slate-600 text-white px-4 py-2 rounded">Cancel</button>
+                    </div>
+                </div>
+            )}
+
+            {view === 'dashboard' && (
+                <Dashboard 
+                    vehicles={vehicles} 
+                    onViewVehicle={(id) => { setActiveVehicleId(id); setView('vehicleDetail'); }} 
+                    snoozed={snoozed}
+                    onSnoozeItem={handleSnooze}
+                    onMarkEmiPaid={(emi, vid, cat) => handleMarkEmiPaid(emi, vid, cat)}
+                    onSnoozeAlarm={handleSnoozeAlarm}
+                    onSetManualAlarm={handleSetManualAlarm}
+                    onDismissAlarm={handleDismissAlarm}
+                />
+            )}
+            
+            {view === 'vehicleList' && (
+                <VehicleList 
+                    vehicles={vehicles} 
+                    onSelectVehicle={(id) => { setActiveVehicleId(id); setView('vehicleDetail'); }} 
+                    onAddAssetClick={() => { setVehicleModalMode('asset'); setEditingVehicle(null); setVehicleModalOpen(true); }}
+                    onAddLoanClick={() => { setVehicleModalMode('loan'); setEditingVehicle(null); setVehicleModalOpen(true); }}
+                />
+            )}
+
+            {view === 'vehicleDetail' && activeVehicle && (
+                <VehicleDetail 
+                    vehicle={activeVehicle} 
+                    onBack={() => { setView('vehicleList'); setActiveVehicleId(null); }}
+                    onAddDoc={handleAddDoc}
+                    onUpdateDoc={handleUpdateDoc}
+                    onDeleteDoc={handleDeleteDoc}
+                    onMarkEmiPaid={(emiId) => {
+                        const emi = activeVehicle.emis.find(e => e.id === emiId);
+                        if (emi) handleMarkEmiPaid(emi, activeVehicle.id, 'today');
+                    }}
+                    onOpenSettleModal={handleSettleLoan}
+                    onEditEmiClick={(emi) => {
+                        setEditingEmi({ emi, vehicleType: activeVehicle.type });
+                    }}
+                    onEditVehicle={() => {
+                        setEditingVehicle(activeVehicle);
+                        setVehicleModalMode([VehicleType.PersonalLoan, VehicleType.BusinessLoan, VehicleType.HomeLoan, VehicleType.Overdraft].includes(activeVehicle.type as any) ? 'loan' : 'asset');
+                        setVehicleModalOpen(true);
+                    }}
+                    onDeleteVehicle={() => {
+                        setDeleteVehicleId(activeVehicle.id);
+                        setDeleteModalOpen(true);
+                    }}
+                />
+            )}
+
+            {view === 'reports' && <Reports vehicles={vehicles} />}
+        </main>
+        
+        {/* Mobile Navigation */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 flex justify-around p-3 pb-safe z-20 shadow-[0_-5px_10px_rgba(0,0,0,0.3)]">
+            <button 
+                onClick={() => { setView('dashboard'); setActiveVehicleId(null); }} 
+                className={`flex flex-col items-center ${view === 'dashboard' ? 'text-indigo-400' : 'text-slate-500'}`}
+            >
+                <DashboardIcon className="w-6 h-6" />
+                <span className="text-[10px] mt-1 font-medium">Dashboard</span>
+            </button>
+            <button 
+                onClick={() => { setView('vehicleList'); setActiveVehicleId(null); }} 
+                className={`flex flex-col items-center ${['vehicleList', 'vehicleDetail'].includes(view) ? 'text-indigo-400' : 'text-slate-500'}`}
+            >
+                <VehicleIcon className="w-6 h-6" />
+                <span className="text-[10px] mt-1 font-medium">Items</span>
+            </button>
+             <button 
+                onClick={() => { setView('reports'); setActiveVehicleId(null); }} 
+                className={`flex flex-col items-center ${view === 'reports' ? 'text-indigo-400' : 'text-slate-500'}`}
+            >
+                <SettingsIcon className="w-6 h-6" />
+                <span className="text-[10px] mt-1 font-medium">Reports</span>
+            </button>
+        </nav>
+
+        {/* Modals */}
+        <VehicleFormModal 
+            isOpen={isVehicleModalOpen} 
+            onClose={() => setVehicleModalOpen(false)} 
+            onSave={handleAddVehicle} 
+            mode={vehicleModalMode}
+            initialData={editingVehicle}
+        />
+
+        <DeleteVehicleModal
+            isOpen={isDeleteModalOpen}
+            onClose={() => setDeleteModalOpen(false)}
+            onConfirm={handleDeleteVehicle}
+            vehicleName={deleteVehicleId ? vehicles.find(v => v.id === deleteVehicleId)?.make + ' ' + vehicles.find(v => v.id === deleteVehicleId)?.model : 'Item'}
+        />
+
+        {editingEmi && (
+            <EmiFormModal 
+                isOpen={!!editingEmi} 
+                onClose={() => setEditingEmi(null)} 
+                onSubmit={handleAddEmi}
+                initialData={editingEmi.emi}
+                vehicleType={editingEmi.vehicleType}
+            />
+        )}
+        
+        <OverduePaymentModal 
+            isOpen={isOverdueModalOpen}
+            onClose={() => setOverdueModalOpen(false)}
+            onSubmit={(date, charges) => overdueEmiTarget && confirmEmiPayment(overdueEmiTarget.vehicleId, overdueEmiTarget.emiId, date, charges)}
+        />
+
+        <ManualInstallModal isOpen={isInstallModalOpen} onClose={() => setInstallModalOpen(false)} />
+        <AddToHomeScreenPrompt />
+    </div>
+  );
+};
+
+export default App;
