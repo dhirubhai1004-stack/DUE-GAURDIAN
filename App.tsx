@@ -19,7 +19,15 @@ let supabase: SupabaseClient | null = null;
 
 try {
     if (SUPABASE_URL && SUPABASE_ANON_KEY && SUPABASE_URL.startsWith('http')) {
-        supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            auth: {
+                persistSession: true,
+                storageKey: 'due-guardian-auth',
+                storage: window.localStorage,
+                detectSessionInUrl: true,
+                autoRefreshToken: true,
+            }
+        });
     }
 } catch (e) {
     console.error("Supabase init failed", e);
@@ -327,7 +335,8 @@ const EmiFormModal: React.FC<{
             const tenureNum = parseInt(totalTenure, 10);
             if (!isNaN(tenureNum) && tenureNum > 0) {
                 const start = new Date(startDate);
-                const end = new Date(start.getFullYear(), start.getMonth() + tenureNum, start.getDate());
+                // Subtract 1 from tenure because start date is the first month
+                const end = new Date(start.getFullYear(), start.getMonth() + tenureNum - 1, start.getDate());
                 const endYMD = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`;
                 setCalculatedEndDate(formatDate(endYMD));
             } else {
@@ -403,7 +412,7 @@ const EmiFormModal: React.FC<{
                 
                 <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <label className="text-sm text-slate-400 mb-1 block">Start Date</label>
+                        <label className="text-sm text-slate-400 mb-1 block">Start Date (First EMI)</label>
                         <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
                     </div>
                     <div>
@@ -519,19 +528,22 @@ const AddDocModal: React.FC<{
             return true;
         }
 
-        const existingDoc = activeDocuments.find(d => d.name === name && d.id !== editingDocId);
+        const existingDoc = activeDocuments.find(d => d.name === name);
 
-        if (existingDoc) {
-            const fiveDaysInMillis = 5 * 24 * 60 * 60 * 1000;
-            const expiryTime = new Date(existingDoc.expiryDate).getTime();
-            const timeUntilExpiry = expiryTime - Date.now();
-
-            if (timeUntilExpiry > fiveDaysInMillis) {
-                setDocNameError(`A valid document named "${name}" already exists. You can renew it when it's closer to expiry.`);
+        // If we are strictly adding a NEW document (not editing, not renewing)
+        if (!isEditing && !isRenewing) {
+            if (existingDoc) {
+                setDocNameError(`"${name}" is already available. Please delete the existing one or renew it.`);
                 return false;
             }
         }
         
+        // If editing, exclude self
+        if (isEditing && existingDoc && existingDoc.id !== editingDocId) {
+            setDocNameError(`"${name}" is already available.`);
+            return false;
+        }
+
         setDocNameError(null);
         return true;
     };
@@ -649,7 +661,7 @@ const AddDocModal: React.FC<{
                     {availableDocNames.map(name => <option key={name} value={name}>{name}</option>)}
                 </select>
                 {docName === 'Other' && <input type="text" placeholder="Custom Document Name" value={customDocName} onChange={handleCustomDocNameChange} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />}
-                {docNameError && <p className="text-sm text-red-400 mt-1">{docNameError}</p>}
+                {docNameError && <p className="text-sm text-red-400 mt-1 font-semibold">{docNameError}</p>}
                 <div>
                     <label className="text-sm text-slate-400">Valid From</label>
                     <input type="date" value={validFrom} onChange={e => setValidFrom(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded" required />
@@ -810,7 +822,8 @@ const VehicleDetail: React.FC<{
                         if (sY < 100) sY += 2000;
 
                         const nextDueDate = new Date(sY, sM - 1 + emi.paidInstallments, sD);
-                        const endDate = new Date(sY, sM - 1 + emi.totalTenure, sD);
+                        // Tenure end calculation fix applied here for display consistency too
+                        const endDate = new Date(sY, sM - 1 + emi.totalTenure - 1, sD);
                         const dueDateStr = `${nextDueDate.getFullYear()}-${String(nextDueDate.getMonth()+1).padStart(2,'0')}-${String(nextDueDate.getDate()).padStart(2,'0')}`;
                         const endDateStr = `${endDate.getFullYear()}-${String(endDate.getMonth()+1).padStart(2,'0')}-${String(endDate.getDate()).padStart(2,'0')}`;
 
@@ -1958,11 +1971,13 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, userId
 const App: React.FC = () => {
     const [session, setSession] = useState<any>(null);
     const [isRecoveryMode, setIsRecoveryMode] = useState(false);
+    const [isLoading, setIsLoading] = useState(true); // Prevent white flash
 
     useEffect(() => {
         if (supabase) {
             supabase.auth.getSession().then(({ data: { session } }) => {
                 setSession(session);
+                setIsLoading(false);
             });
 
             const {
@@ -1972,11 +1987,18 @@ const App: React.FC = () => {
                     setIsRecoveryMode(true);
                 }
                 setSession(session);
+                setIsLoading(false);
             });
 
             return () => subscription.unsubscribe();
+        } else {
+            setIsLoading(false);
         }
     }, []);
+
+    if (isLoading) {
+        return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-indigo-400">Loading...</div>;
+    }
 
     // If session exists, show app. Otherwise show Auth (Login/Signup).
     if (!session) {
