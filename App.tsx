@@ -5,7 +5,7 @@ import { Vehicle, VehicleType, Emi, Document, PREDEFINED_DOC_NAMES, EmiPayment, 
 import Dashboard from './components/Dashboard';
 import Modal from './components/Modal';
 import Reports from './components/Reports';
-import { PlusIcon, ArrowLeftIcon, CarIcon, TruckIcon, MachineIcon, BikeIcon, DashboardIcon, VehicleIcon, DownloadIcon, EditIcon, DeleteIcon, CheckCircleIcon, OtherVehicleIcon, PersonalLoanIcon, BusinessLoanIcon, HomeLoanIcon, LogoutIcon, SettingsIcon, EyeIcon, BellIcon } from './components/icons';
+import { PlusIcon, ArrowLeftIcon, CarIcon, TruckIcon, MachineIcon, BikeIcon, DashboardIcon, VehicleIcon, DownloadIcon, EditIcon, DeleteIcon, CheckCircleIcon, OtherVehicleIcon, PersonalLoanIcon, BusinessLoanIcon, HomeLoanIcon, LogoutIcon, SettingsIcon, EyeIcon, BellIcon, SearchIcon } from './components/icons';
 import AddToHomeScreenPrompt from './components/AddToHomeScreenPrompt';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
@@ -687,53 +687,88 @@ const AddDocModal: React.FC<{
 };
 
 
-const VehicleList: React.FC<{ vehicles: Vehicle[], onSelectVehicle: (id: string) => void, onAddAssetClick: () => void, onAddLoanClick: () => void }> = ({ vehicles, onSelectVehicle, onAddAssetClick, onAddLoanClick }) => (
-    <div className="p-4 md:p-6">
-        <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold text-indigo-400">My Assets & Loans</h1>
-            <div className="flex gap-2">
-                <button onClick={onAddAssetClick} className="bg-indigo-600 hover:bg-indigo-700 py-2 px-3 rounded-lg text-white flex items-center gap-2 text-sm font-bold" title="Add Car, Bike, etc.">
-                    <PlusIcon className="w-4 h-4" />
-                    <span className="hidden sm:inline">Asset</span>
-                    <CarIcon className="w-4 h-4 sm:hidden" />
-                </button>
-                <button onClick={onAddLoanClick} className="bg-emerald-600 hover:bg-emerald-700 py-2 px-3 rounded-lg text-white flex items-center gap-2 text-sm font-bold" title="Add Personal Loan, Home Loan, etc.">
-                    <PlusIcon className="w-4 h-4" />
-                    <span className="hidden sm:inline">Loan</span>
-                    <PersonalLoanIcon className="w-4 h-4 sm:hidden" />
-                </button>
-            </div>
-        </div>
-        {vehicles.length === 0 ? (
-             <div className="text-center py-16 bg-slate-800 rounded-lg">
-                <p className="text-slate-400">No items found.</p>
-                <div className="flex flex-col items-center gap-3 mt-6">
-                    <button onClick={onAddAssetClick} className="w-48 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2">
-                        <CarIcon className="w-5 h-5" /> Add Asset
+const VehicleList: React.FC<{ vehicles: Vehicle[], onSelectVehicle: (id: string) => void, onAddAssetClick: () => void, onAddLoanClick: () => void }> = ({ vehicles, onSelectVehicle, onAddAssetClick, onAddLoanClick }) => {
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const filteredVehicles = vehicles.filter(v => {
+        const query = searchQuery.toLowerCase();
+        return (
+            v.make.toLowerCase().includes(query) ||
+            v.model.toLowerCase().includes(query) ||
+            v.registrationNumber.toLowerCase().includes(query)
+        );
+    });
+
+    return (
+        <div className="p-4 md:p-6">
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-3xl font-bold text-indigo-400">My Assets & Loans</h1>
+                <div className="flex gap-2">
+                    <button onClick={onAddAssetClick} className="bg-indigo-600 hover:bg-indigo-700 py-2 px-3 rounded-lg text-white flex items-center gap-2 text-sm font-bold" title="Add Car, Bike, etc.">
+                        <PlusIcon className="w-4 h-4" />
+                        <span className="hidden sm:inline">Asset</span>
+                        <CarIcon className="w-4 h-4 sm:hidden" />
                     </button>
-                    <button onClick={onAddLoanClick} className="w-48 bg-emerald-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2">
-                        <PersonalLoanIcon className="w-5 h-5" /> Add Loan
+                    <button onClick={onAddLoanClick} className="bg-emerald-600 hover:bg-emerald-700 py-2 px-3 rounded-lg text-white flex items-center gap-2 text-sm font-bold" title="Add Personal Loan, Home Loan, etc.">
+                        <PlusIcon className="w-4 h-4" />
+                        <span className="hidden sm:inline">Loan</span>
+                        <PersonalLoanIcon className="w-4 h-4 sm:hidden" />
                     </button>
                 </div>
             </div>
-        ) : (
-            <div className="space-y-4">
-            {vehicles.map(v => (
-                <div key={v.id} onClick={() => onSelectVehicle(v.id)} className="bg-slate-800 p-4 rounded-lg flex items-center justify-between cursor-pointer hover:bg-slate-700 transition-colors">
-                    <div className="flex items-center space-x-4">
-                        {getVehicleIcon(v.type)}
-                        <div>
-                            <p className="font-bold text-lg">{getVehicleDisplayName(v)}</p>
-                            <p className="text-sm text-slate-400">{v.registrationNumber}</p>
-                        </div>
+
+            {vehicles.length > 0 && (
+                <div className="relative mb-6">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <SearchIcon className="h-5 w-5 text-slate-400" />
                     </div>
-                    <span className="text-slate-500">{'>'}</span>
+                    <input
+                        type="text"
+                        placeholder="Search by name, model, or reg number..."
+                        className="block w-full pl-10 pr-3 py-2 border border-slate-700 rounded-lg leading-5 bg-slate-800 text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:text-sm"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                    />
                 </div>
-            ))}
-            </div>
-        )}
-    </div>
-);
+            )}
+
+            {vehicles.length === 0 ? (
+                 <div className="text-center py-16 bg-slate-800 rounded-lg">
+                    <p className="text-slate-400">No items found.</p>
+                    <div className="flex flex-col items-center gap-3 mt-6">
+                        <button onClick={onAddAssetClick} className="w-48 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2">
+                            <CarIcon className="w-5 h-5" /> Add Asset
+                        </button>
+                        <button onClick={onAddLoanClick} className="w-48 bg-emerald-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2">
+                            <PersonalLoanIcon className="w-5 h-5" /> Add Loan
+                        </button>
+                    </div>
+                </div>
+            ) : filteredVehicles.length === 0 ? (
+                <div className="text-center py-12 bg-slate-800/50 rounded-lg border border-slate-700 border-dashed">
+                    <p className="text-slate-400 mb-2">No matching assets found.</p>
+                    <p className="text-sm text-slate-500">Try checking the spelling or searching for a different keyword.</p>
+                    <button onClick={() => setSearchQuery('')} className="mt-4 text-indigo-400 hover:text-indigo-300 underline text-sm">Clear Search</button>
+                </div>
+            ) : (
+                <div className="space-y-4">
+                {filteredVehicles.map(v => (
+                    <div key={v.id} onClick={() => onSelectVehicle(v.id)} className="bg-slate-800 p-4 rounded-lg flex items-center justify-between cursor-pointer hover:bg-slate-700 transition-colors">
+                        <div className="flex items-center space-x-4">
+                            {getVehicleIcon(v.type)}
+                            <div>
+                                <p className="font-bold text-lg">{getVehicleDisplayName(v)}</p>
+                                <p className="text-sm text-slate-400">{v.registrationNumber}</p>
+                            </div>
+                        </div>
+                        <span className="text-slate-500">{'>'}</span>
+                    </div>
+                ))}
+                </div>
+            )}
+        </div>
+    );
+};
 
 
 const VehicleDetail: React.FC<{ 
@@ -1571,9 +1606,61 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, userId
         return () => { if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current); };
     }, [vehicles, snoozed, settings, userId, isInitialLoadCompleted]);
 
+    // --- Navigation and State Persistence ---
+    const [view, setView] = useLocalStorage<View>(`${currentUser}_lastView`, 'dashboard');
+    const [selectedVehicleId, setSelectedVehicleId] = useLocalStorage<string | null>(`${currentUser}_lastSelectedVehicle`, null);
 
-    const [view, setView] = useState<View>('dashboard');
-    const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+    // --- Background Refresh Logic ---
+    // Track when user last made a local change to prevent overwriting
+    const [lastLocalUpdate, setLastLocalUpdate] = useState(Date.now());
+
+    // Update timestamp whenever local data changes
+    useEffect(() => {
+        setLastLocalUpdate(Date.now());
+    }, [vehicles, snoozed, settings]);
+
+    // Define Fetch Function
+    const fetchRemoteData = async () => {
+        if (!supabase || !userId) return;
+        
+        // Guard: Don't fetch if user made changes locally in last 5 seconds
+        if (Date.now() - lastLocalUpdate < 5000) return;
+
+        try {
+            const { data, error } = await supabase
+                .from('user_data')
+                .select('*')
+                .eq('user_id', userId)
+                .single();
+            
+            if (data && data.updated_at) {
+                // Determine if remote is newer? (Ideally we'd compare timestamps, but for now we just trust remote 
+                // if local hasn't been touched recently).
+                // A better approach would be storing local_updated_at and comparing.
+                // For this simple implementation, we just overwrite if local is idle.
+                
+                if (data.vehicles && Array.isArray(data.vehicles)) setVehicles(data.vehicles);
+                if (data.snoozed) setSnoozed(data.snoozed);
+                if (data.settings) setSettings(data.settings);
+            }
+        } catch (err) {
+            // silent fail
+        }
+    };
+
+    // Add Global Click Listener for "Refresh on Interaction"
+    useEffect(() => {
+        const handleInteraction = () => {
+            // Throttle: Only try fetch once every 5 seconds per interaction session
+            if (!syncTimeoutRef.current) {
+               fetchRemoteData();
+            }
+        };
+
+        window.addEventListener('click', handleInteraction);
+        return () => window.removeEventListener('click', handleInteraction);
+    }, [userId, lastLocalUpdate]);
+
     const [isVehicleFormModalOpen, setVehicleFormModalOpen] = useState(false);
     const [addModalMode, setAddModalMode] = useState<'asset' | 'loan'>('asset');
     const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
@@ -1901,7 +1988,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, userId
                     return <VehicleDetail vehicle={selectedVehicle} onBack={() => setView('vehicleList')} onAddDoc={handleAddDoc} onUpdateDoc={handleUpdateDoc} onDeleteDoc={(doc) => setDocToDelete({ vehicleId: selectedVehicle.id, doc })} onMarkEmiPaid={handleMarkEmiPaid} onOpenSettleModal={handleOpenSettleModal} onEditEmiClick={(emi) => { setEditingEmi(emi); setEmiModalOpen(true); }} onEditVehicle={handleEditVehicle} onDeleteVehicle={handleDeleteVehicleClick} />;
                 }
                 setView('vehicleList'); return null;
-            case 'reports': return <Reports vehicles={vehicles} />;
+            case 'reports': return <Reports vehicles={vehicles} userKey={currentUser} />;
             case 'dashboard': default: return <Dashboard vehicles={vehicles} onViewVehicle={handleViewVehicleFromDashboard} snoozed={snoozed} onSnoozeItem={handleSnoozeItem} onMarkEmiPaid={handleOpenEmiPaidModal} onSnoozeAlarm={handleSnoozeAlarm} onSetManualAlarm={handleSetManualAlarm} onDismissAlarm={handleDismissAlarm} />;
         }
     };
