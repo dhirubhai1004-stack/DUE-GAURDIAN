@@ -1508,12 +1508,16 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, userId
 
     // --- Sync State Logic ---
     const [isSyncing, setIsSyncing] = useState(false);
+    const [isInitialLoadCompleted, setIsInitialLoadCompleted] = useState(false);
     const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // 1. Load remote data on mount
     useEffect(() => {
         const fetchRemoteData = async () => {
-            if (!supabase) return;
+            if (!supabase) {
+                setIsInitialLoadCompleted(true);
+                return;
+            }
             setIsSyncing(true);
             try {
                 const { data, error } = await supabase
@@ -1534,6 +1538,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, userId
                 console.error("Sync load error", err);
             } finally {
                 setIsSyncing(false);
+                setIsInitialLoadCompleted(true);
             }
         };
         fetchRemoteData();
@@ -1541,7 +1546,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, userId
 
     // 2. Save to remote on change (Debounced)
     useEffect(() => {
-        if (!supabase) return;
+        if (!supabase || !isInitialLoadCompleted) return;
         
         if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
         
@@ -1564,7 +1569,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, userId
         }, 2000); // 2 second debounce
 
         return () => { if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current); };
-    }, [vehicles, snoozed, settings, userId]);
+    }, [vehicles, snoozed, settings, userId, isInitialLoadCompleted]);
 
 
     const [view, setView] = useState<View>('dashboard');
