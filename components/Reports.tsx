@@ -1,12 +1,14 @@
+
 import React, { useState, useMemo } from 'react';
 import { Vehicle, VehicleType, PREDEFINED_DOC_NAMES } from '../types';
 import { DownloadIcon, EmiIcon, DocumentIcon, ArrowLeftIcon } from './icons';
 
 interface ReportsProps {
   vehicles: Vehicle[];
+  userKey: string;
 }
 
-type ReportType = 'upcoming' | 'paid'; // For Docs: 'upcoming' = Expiring Soon, 'paid' = Expired
+type ReportType = 'upcoming' | 'paid'; 
 type ReportCategory = 'emi' | 'doc' | null;
 type Duration = 7 | 15 | 30 | 60 | 90 | 180 | 365;
 
@@ -16,7 +18,6 @@ const formatDate = (date: Date): string => {
     return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
 };
 
-// Helper to get display name (copied from App.tsx/Dashboard.tsx logic)
 const getVehicleDisplayName = (vehicle: Vehicle) => {
     const loanTypes = [
         VehicleType.PersonalLoan, 
@@ -41,7 +42,6 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
     const [selectedBank, setSelectedBank] = useState<string>('All');
     const [selectedDocType, setSelectedDocType] = useState<string>('All');
 
-    // Extract unique banks from all EMIs
     const availableBanks = useMemo(() => {
         const banks = new Set<string>();
         vehicles.forEach(v => {
@@ -54,39 +54,20 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
         return Array.from(banks).sort();
     }, [vehicles]);
 
-    // Extract unique doc names, including all predefined types
     const availableDocTypes = useMemo(() => {
-        // Start with predefined names
         const types = new Set<string>(PREDEFINED_DOC_NAMES);
-        
-        // Add any custom names currently in use
         vehicles.forEach(v => {
             v.documents.forEach(d => types.add(d.name));
         });
-        
-        // Remove 'Other' as it's usually just a selector for custom input
         if (types.has('Other')) types.delete('Other');
-
         return Array.from(types).sort();
     }, [vehicles]);
 
-    // EMI Data Logic
     const emiData = useMemo(() => {
         if (category !== 'emi') return [];
-
-        const rows: {
-            date: string;
-            dateObj: Date;
-            amount: number;
-            vehicleName: string;
-            regNumber: string;
-            bank: string;
-            total?: number;
-        }[] = [];
-
+        const rows: { date: string; dateObj: Date; amount: number; vehicleName: string; regNumber: string; bank: string; total?: number; }[] = [];
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-
         const targetDate = new Date(today);
         
         if (reportType === 'upcoming') {
@@ -98,28 +79,17 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
         vehicles.forEach(vehicle => {
             vehicle.emis.forEach(emi => {
                 const bankName = emi.emiBank ? emi.emiBank.trim() : '-';
-                if (selectedBank !== 'All' && bankName !== selectedBank) {
-                    return;
-                }
+                if (selectedBank !== 'All' && bankName !== selectedBank) return;
 
                 if (reportType === 'upcoming') {
                     if (emi.paidInstallments < emi.totalTenure) {
                         let [sY, sM, sD] = emi.startDate.split('-').map(Number);
                         if (sY < 100) sY += 2000;
-                        
                         for (let i = emi.paidInstallments; i < emi.totalTenure; i++) {
                             const dueDate = new Date(sY, sM - 1 + i, sD);
                             const dueDateMidnight = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
-                            
                             if (dueDateMidnight >= today && dueDateMidnight <= targetDate) {
-                                rows.push({
-                                    date: formatDate(dueDateMidnight),
-                                    dateObj: dueDateMidnight,
-                                    amount: emi.amount,
-                                    vehicleName: getVehicleDisplayName(vehicle),
-                                    regNumber: vehicle.registrationNumber,
-                                    bank: bankName
-                                });
+                                rows.push({ date: formatDate(dueDateMidnight), dateObj: dueDateMidnight, amount: emi.amount, vehicleName: getVehicleDisplayName(vehicle), regNumber: vehicle.registrationNumber, bank: bankName });
                             }
                         }
                     }
@@ -128,45 +98,25 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
                         emi.paymentHistory.forEach(payment => {
                             const paidDate = new Date(payment.paidDate);
                             paidDate.setHours(0,0,0,0);
-                            
                             if (paidDate >= targetDate && paidDate <= today) {
-                                rows.push({
-                                    date: formatDate(paidDate),
-                                    dateObj: paidDate,
-                                    amount: payment.amount,
-                                    vehicleName: getVehicleDisplayName(vehicle),
-                                    regNumber: vehicle.registrationNumber,
-                                    bank: bankName
-                                });
+                                rows.push({ date: formatDate(paidDate), dateObj: paidDate, amount: payment.amount, vehicleName: getVehicleDisplayName(vehicle), regNumber: vehicle.registrationNumber, bank: bankName });
                             }
                         });
                     }
                 }
             });
         });
-
         rows.sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
-
         let runningTotal = 0;
         return rows.map(row => {
             runningTotal += row.amount;
             return { ...row, total: runningTotal };
         });
-
     }, [vehicles, reportType, duration, selectedBank, category]);
 
-    // Document Data Logic
     const docData = useMemo(() => {
         if (category !== 'doc') return [];
-
-        const rows: {
-            date: string;
-            dateObj: Date;
-            docName: string;
-            vehicleName: string;
-            regNumber: string;
-        }[] = [];
-
+        const rows: { date: string; dateObj: Date; docName: string; vehicleName: string; regNumber: string; }[] = [];
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const targetDate = new Date(today);
@@ -180,73 +130,44 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
         vehicles.forEach(vehicle => {
             vehicle.documents.forEach(doc => {
                 if (selectedDocType !== 'All' && doc.name !== selectedDocType) return;
-
                 const expiryDate = new Date(doc.expiryDate);
-                // Reset time for accurate date comparison
                 const expiryDateMidnight = new Date(expiryDate.getFullYear(), expiryDate.getMonth(), expiryDate.getDate());
-
                 if (reportType === 'upcoming') {
-                    // Show docs expiring in the future (from Today to TargetDate)
                     if (expiryDateMidnight >= today && expiryDateMidnight <= targetDate) {
-                        rows.push({
-                            date: formatDate(expiryDateMidnight),
-                            dateObj: expiryDateMidnight,
-                            docName: doc.name,
-                            vehicleName: getVehicleDisplayName(vehicle),
-                            regNumber: vehicle.registrationNumber
-                        });
+                        rows.push({ date: formatDate(expiryDateMidnight), dateObj: expiryDateMidnight, docName: doc.name, vehicleName: getVehicleDisplayName(vehicle), regNumber: vehicle.registrationNumber });
                     }
                 } else {
-                    // "Paid" aka "History" context for docs: Docs that expired in the past window
                     if (expiryDateMidnight >= targetDate && expiryDateMidnight < today) {
-                         rows.push({
-                            date: formatDate(expiryDateMidnight),
-                            dateObj: expiryDateMidnight,
-                            docName: doc.name,
-                            vehicleName: getVehicleDisplayName(vehicle),
-                            regNumber: vehicle.registrationNumber
-                        });
+                         rows.push({ date: formatDate(expiryDateMidnight), dateObj: expiryDateMidnight, docName: doc.name, vehicleName: getVehicleDisplayName(vehicle), regNumber: vehicle.registrationNumber });
                     }
                 }
             });
         });
-
         rows.sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
         return rows;
     }, [vehicles, reportType, duration, selectedDocType, category]);
 
-
-    // --- Selection Screen ---
     if (!category) {
         return (
             <div className="p-4 md:p-6 pb-24 flex flex-col items-center justify-center min-h-[60vh]">
                  <h1 className="text-3xl font-bold text-indigo-400 mb-8">Generate Report</h1>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-2xl">
-                     <button 
-                        onClick={() => setCategory('emi')}
-                        className="bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-indigo-500 rounded-xl p-8 flex flex-col items-center text-center transition-all group"
-                     >
-                        <div className="bg-indigo-900/50 p-4 rounded-full mb-4 group-hover:bg-indigo-600 transition-colors">
-                            <EmiIcon className="w-12 h-12 text-indigo-400 group-hover:text-white" />
-                        </div>
+                     <button onClick={() => setCategory('emi')} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-indigo-500 rounded-xl p-8 flex flex-col items-center text-center transition-all group">
+                        <div className="bg-indigo-900/50 p-4 rounded-full mb-4 group-hover:bg-indigo-600 transition-colors"><EmiIcon className="w-12 h-12 text-indigo-400 group-hover:text-white" /></div>
                         <h2 className="text-xl font-bold text-white mb-2">EMI Report</h2>
-                        <p className="text-slate-400 text-sm">Generate financial reports for vehicle installments, loans, and payment history.</p>
+                        <p className="text-slate-400 text-sm">Reports for installments and payment history.</p>
                      </button>
-
-                     <button 
-                        onClick={() => setCategory('doc')}
-                        className="bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-purple-500 rounded-xl p-8 flex flex-col items-center text-center transition-all group"
-                     >
-                        <div className="bg-purple-900/50 p-4 rounded-full mb-4 group-hover:bg-purple-600 transition-colors">
-                            <DocumentIcon className="w-12 h-12 text-purple-400 group-hover:text-white" />
-                        </div>
+                     <button onClick={() => setCategory('doc')} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-purple-500 rounded-xl p-8 flex flex-col items-center text-center transition-all group">
+                        <div className="bg-purple-900/50 p-4 rounded-full mb-4 group-hover:bg-purple-600 transition-colors"><DocumentIcon className="w-12 h-12 text-purple-400 group-hover:text-white" /></div>
                         <h2 className="text-xl font-bold text-white mb-2">Document Report</h2>
-                        <p className="text-slate-400 text-sm">Track document expiries like RC, Insurance, Permit, and Fitness certificates.</p>
+                        <p className="text-slate-400 text-sm">RC, Insurance, PUC and other certificate expiries.</p>
                      </button>
                  </div>
             </div>
         );
     }
+
+    const durationLabel = reportType === 'upcoming' ? 'Next' : 'Last';
 
     return (
         <div className="p-4 md:p-6 pb-24">
@@ -284,19 +205,19 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
                             onChange={(e) => setDuration(Number(e.target.value) as Duration)}
                             className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg p-2.5 outline-none focus:border-indigo-500"
                         >
-                            <option value={7}>{category === 'emi' ? 'Next' : 'Last/Next'} 7 Days</option>
-                            <option value={15}>{category === 'emi' ? 'Next' : 'Last/Next'} 15 Days</option>
-                            <option value={30}>{category === 'emi' ? 'Next' : 'Last/Next'} 1 Month</option>
-                            <option value={60}>{category === 'emi' ? 'Next' : 'Last/Next'} 2 Months</option>
-                            <option value={90}>{category === 'emi' ? 'Next' : 'Last/Next'} 3 Months</option>
-                            <option value={180}>{category === 'emi' ? 'Next' : 'Last/Next'} 6 Months</option>
-                            <option value={365}>{category === 'emi' ? 'Next' : 'Last/Next'} 1 Year</option>
+                            <option value={7}>{durationLabel} 7 Days</option>
+                            <option value={15}>{durationLabel} 15 Days</option>
+                            <option value={30}>{durationLabel} 1 Month</option>
+                            <option value={60}>{durationLabel} 2 Months</option>
+                            <option value={90}>{durationLabel} 3 Months</option>
+                            <option value={180}>{durationLabel} 6 Months</option>
+                            <option value={365}>{durationLabel} 1 Year</option>
                         </select>
                     </div>
 
                     {category === 'emi' ? (
                         <div>
-                            <label className="block text-sm text-slate-400 mb-2">Filter by Bank</label>
+                            <label className="block text-sm text-slate-400 mb-2">Bank</label>
                             <select 
                                 value={selectedBank} 
                                 onChange={(e) => setSelectedBank(e.target.value)}
@@ -306,12 +227,11 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
                                 {availableBanks.map(bank => (
                                     <option key={bank} value={bank}>{bank}</option>
                                 ))}
-                                <option value="-">No Bank Specified</option>
                             </select>
                         </div>
                     ) : (
                          <div>
-                            <label className="block text-sm text-slate-400 mb-2">Filter by Document</label>
+                            <label className="block text-sm text-slate-400 mb-2">Document</label>
                             <select 
                                 value={selectedDocType} 
                                 onChange={(e) => setSelectedDocType(e.target.value)}
@@ -330,13 +250,11 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
             <div className="bg-slate-800 rounded-lg shadow-lg border border-slate-700 overflow-hidden">
                 <div className="p-4 border-b border-slate-700 flex justify-between items-center">
                     <h2 className="text-lg font-bold text-white">
+                        <span className="text-indigo-400 mr-2">{durationLabel} {duration} Days:</span>
                         {category === 'emi' 
-                            ? (reportType === 'upcoming' ? 'Upcoming Payments' : 'Payments History')
-                            : (reportType === 'upcoming' ? 'Expiring Documents' : 'Expired Documents')
+                            ? (reportType === 'upcoming' ? 'Upcoming Payments' : 'Paid History')
+                            : (reportType === 'upcoming' ? 'Expiring Soon' : 'Expired History')
                         }
-                         <span className="text-sm font-normal text-slate-400 ml-2 hidden sm:inline">
-                             ({duration} days)
-                         </span>
                     </h2>
                     <span className="bg-slate-700 text-xs px-2 py-1 rounded text-slate-300">
                         {category === 'emi' ? emiData.length : docData.length} Records
@@ -353,7 +271,7 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
                                     <th className="px-4 py-3 whitespace-nowrap">Vehicle / Loan</th>
                                     <th className="px-4 py-3 whitespace-nowrap">Reg / ID</th>
                                     <th className="px-4 py-3 whitespace-nowrap">Bank</th>
-                                    <th className="px-4 py-3 whitespace-nowrap text-right text-indigo-300">Cumulative Total</th>
+                                    <th className="px-4 py-3 whitespace-nowrap text-right text-indigo-300">Total</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-700">
@@ -372,14 +290,6 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
                                     ))
                                 )}
                             </tbody>
-                            {emiData.length > 0 && (
-                                <tfoot className="bg-slate-700/80 font-bold text-white">
-                                    <tr>
-                                        <td colSpan={5} className="px-4 py-3 text-right">Grand Total:</td>
-                                        <td className="px-4 py-3 text-right text-indigo-300">₹{emiData[emiData.length - 1].total?.toLocaleString()}</td>
-                                    </tr>
-                                </tfoot>
-                            )}
                         </table>
                     ) : (
                          <table className="w-full text-left text-sm text-slate-300">
