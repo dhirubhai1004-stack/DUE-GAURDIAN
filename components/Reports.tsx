@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Vehicle, VehicleType, PREDEFINED_DOC_NAMES } from '../types';
 import { DownloadIcon, EmiIcon, DocumentIcon, ArrowLeftIcon } from './icons';
@@ -248,6 +249,8 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
         );
     }
 
+    const durationLabel = reportType === 'upcoming' ? 'Next' : 'Last';
+
     return (
         <div className="p-4 md:p-6 pb-24">
             <div className="flex items-center gap-2 mb-6">
@@ -284,13 +287,13 @@ const Reports: React.FC<ReportsProps> = ({ vehicles }) => {
                             onChange={(e) => setDuration(Number(e.target.value) as Duration)}
                             className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg p-2.5 outline-none focus:border-indigo-500"
                         >
-                            <option value={7}>{category === 'emi' ? 'Next' : 'Last/Next'} 7 Days</option>
-                            <option value={15}>{category === 'emi' ? 'Next' : 'Last/Next'} 15 Days</option>
-                            <option value={30}>{category === 'emi' ? 'Next' : 'Last/Next'} 1 Month</option>
-                            <option value={60}>{category === 'emi' ? 'Next' : 'Last/Next'} 2 Months</option>
-                            <option value={90}>{category === 'emi' ? 'Next' : 'Last/Next'} 3 Months</option>
-                            <option value={180}>{category === 'emi' ? 'Next' : 'Last/Next'} 6 Months</option>
-                            <option value={365}>{category === 'emi' ? 'Next' : 'Last/Next'} 1 Year</option>
+                            <option value={7}>{durationLabel} 7 Days</option>
+                            <option value={15}>{durationLabel} 15 Days</option>
+                            <option value={30}>{durationLabel} 1 Month</option>
+                            <option value={60}>{durationLabel} 2 Months</option>
+                            <option value={90}>{durationLabel} 3 Months</option>
+                            <option value={180}>{durationLabel} 6 Months</option>
+                            <option value={365}>{durationLabel} 1 Year</option>
                         </select>
                     </div>
 
