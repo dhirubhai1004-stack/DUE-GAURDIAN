@@ -1385,7 +1385,7 @@ const SettingsModal: React.FC<{
 
 type AuthMode = 'login' | 'signup' | 'forgot_password';
 
-const AuthScreen: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
+const AuthScreen: React.FC<{ onLogin: () => void; onGuestLogin: () => void }> = ({ onLogin, onGuestLogin }) => {
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -1396,7 +1396,7 @@ const AuthScreen: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!supabase) {
-        setError("Database not connected. Please check configuration.");
+        setError("Database not connected. Please use Guest / Local Mode below.");
         return;
     }
     setError('');
@@ -1420,19 +1420,16 @@ const AuthScreen: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
             }
 
             // 2. If no session, it means 'Confirm Email' is ON.
-            // We try to Force Login just in case (sometimes helps update state, or fails fast)
             const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
             
             if (signInData.session) {
                 return;
             }
 
-            // 3. If login failed specifically because of email not confirmed, tell the user to fix their config.
             if (signInError && signInError.message.includes("Email not confirmed")) {
-                 setError("Account created! To login immediately without verification, please disable 'Confirm Email' in your Supabase Authentication settings.");
+                 setError("Account created! Please check your email inbox to confirm your account, or use Guest Mode to enter immediately.");
             } else {
-                 // Fallback for other issues
-                 setSuccessMessage("Account created. Please try logging in.");
+                 setSuccessMessage("Account created successfully! You can now log in.");
                  setAuthMode('login'); 
             }
 
@@ -1444,9 +1441,9 @@ const AuthScreen: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
     } catch (err: any) {
         const msg = err.message || "";
         if (msg.includes("Invalid login credentials")) {
-            setError("Incorrect email or password. If you haven't created an account, please Sign Up first.");
+            setError("Incorrect email or password. Pehle 'Sign Up' karke account banayein ya bina login ke 'Guest Mode' use karein.");
         } else if (msg.includes("Email not confirmed")) {
-            setError("Please confirm your email address. Check your inbox (and spam folder) for the verification link.");
+            setError("Email verify nahi hua hai. Apni Inbox check karein ya bina login ke 'Guest Mode' use karein.");
         } else if (msg.toLowerCase().includes("security purposes") || msg.toLowerCase().includes("wait")) {
             setError("Too many attempts. Please wait a few seconds before trying again.");
         } else {
@@ -1476,31 +1473,63 @@ const AuthScreen: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
                 <path d="M291 180V220" stroke="white" strokeWidth="16" strokeLinecap="round"/>
             </svg>
             <h1 className="text-3xl font-bold text-white">Due Guardian</h1>
+            <p className="text-xs text-slate-400 mt-1">Vehicle EMI & Document Reminder</p>
           </div>
+          
           <h2 className="text-xl font-bold text-indigo-400 mb-2 text-center">
             {authMode === 'login' ? 'Welcome Back' : (authMode === 'signup' ? 'Create Account' : 'Reset Password')}
           </h2>
           
           <form onSubmit={handleSubmit} className="space-y-4 mt-6">
-             {error && <div className="bg-red-900/50 text-red-200 p-3 rounded text-sm text-center border border-red-500/50">{error}</div>}
+             {error && (
+               <div className="bg-red-900/50 text-red-200 p-3 rounded text-sm text-center border border-red-500/50 space-y-2">
+                 <p>{error}</p>
+                 {authMode === 'login' && (
+                   <button 
+                     type="button" 
+                     onClick={() => toggleMode('signup')}
+                     className="inline-block bg-red-800 hover:bg-red-700 text-white text-xs px-3 py-1 rounded transition-colors font-semibold"
+                   >
+                     👉 Naya Account Banayein (Sign Up)
+                   </button>
+                 )}
+               </div>
+             )}
              {successMessage && <div className="bg-green-900/50 text-green-200 p-3 rounded text-sm text-center border border-green-500/50">{successMessage}</div>}
              
              <div>
                <label className="block text-sm text-slate-400 mb-1">Email</label>
-               <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white focus:border-indigo-500 outline-none" required />
+               <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white focus:border-indigo-500 outline-none" placeholder="yourname@example.com" required />
              </div>
              
              {authMode !== 'forgot_password' && (
                  <div>
                    <label className="block text-sm text-slate-400 mb-1">Password</label>
-                   <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white focus:border-indigo-500 outline-none" required minLength={6} />
+                   <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white focus:border-indigo-500 outline-none" placeholder="••••••••" required minLength={6} />
                  </div>
              )}
              
-             <button type="submit" disabled={loading || !supabase} className="w-full bg-indigo-600 hover:bg-indigo-700 p-2 rounded text-white font-bold mt-4 transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
-               {loading ? 'Processing...' : (authMode === 'login' ? 'Login' : (authMode === 'signup' ? 'Sign Up & Login' : 'Send Reset Link'))}
+             <button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 p-2.5 rounded text-white font-bold mt-4 transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
+               {loading ? 'Processing...' : (authMode === 'login' ? 'Login' : (authMode === 'signup' ? 'Sign Up' : 'Send Reset Link'))}
              </button>
           </form>
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-700"></div></div>
+            <div className="relative flex justify-center text-xs uppercase"><span className="bg-slate-800 px-2 text-slate-400">या फिर (OR)</span></div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onGuestLogin}
+            className="w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-200 font-medium py-2.5 px-4 rounded flex items-center justify-center gap-2 transition-colors"
+          >
+            <svg className="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+            <span>Continue in Guest / Local Mode (बिना लॉगिन)</span>
+          </button>
+          <p className="text-xs text-slate-400 text-center mt-2">
+            Instant offline access without creating an account.
+          </p>
 
           <div className="text-center text-slate-400 text-sm mt-6 space-y-2">
             {authMode === 'login' && (
@@ -1555,7 +1584,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, userId
     // 1. Load remote data on mount
     useEffect(() => {
         const fetchRemoteData = async () => {
-            if (!supabase) {
+            if (!supabase || userId === 'guest_local_id') {
                 setIsInitialLoadCompleted(true);
                 return;
             }
@@ -1587,7 +1616,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, userId
 
     // 2. Save to remote on change (Debounced)
     useEffect(() => {
-        if (!supabase || !isInitialLoadCompleted) return;
+        if (!supabase || !isInitialLoadCompleted || userId === 'guest_local_id') return;
         
         if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
         
@@ -1627,7 +1656,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, userId
 
     // Define Fetch Function
     const fetchRemoteData = async () => {
-        if (!supabase || !userId) return;
+        if (!supabase || !userId || userId === 'guest_local_id') return;
         
         // Guard: Don't fetch if user made changes locally in last 5 seconds
         if (Date.now() - lastLocalUpdate < 5000) return;
@@ -2068,6 +2097,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ currentUser, userId
 
 const App: React.FC = () => {
     const [session, setSession] = useState<any>(null);
+    const [isGuestMode, setIsGuestMode] = useLocalStorage<boolean>('due_guardian_is_guest', false);
     const [isRecoveryMode, setIsRecoveryMode] = useState(false);
     const [isLoading, setIsLoading] = useState(true); // Prevent white flash
 
@@ -2098,19 +2128,25 @@ const App: React.FC = () => {
         return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-indigo-400">Loading...</div>;
     }
 
-    // If session exists, show app. Otherwise show Auth (Login/Signup).
-    if (!session) {
-        return <AuthScreen onLogin={() => {}} />;
+    // If neither session nor guest mode is active, show Auth screen
+    if (!session && !isGuestMode) {
+        return <AuthScreen onLogin={() => {}} onGuestLogin={() => setIsGuestMode(true)} />;
     }
+
+    const currentEmail = session?.user?.email || 'Guest User';
+    const currentUserId = session?.user?.id || 'guest_local_id';
 
     return (
         <AuthenticatedApp 
-            key={session.user.id} 
-            currentUser={session.user.email || 'user'} 
-            userId={session.user.id}
+            key={currentUserId} 
+            currentUser={currentEmail} 
+            userId={currentUserId}
             onLogout={() => {
+                setIsGuestMode(false);
                 setIsRecoveryMode(false);
-                supabase?.auth.signOut();
+                if (session) {
+                    supabase?.auth.signOut();
+                }
             }}
             isRecoveryMode={isRecoveryMode}
             onResetPasswordSuccess={() => setIsRecoveryMode(false)}
